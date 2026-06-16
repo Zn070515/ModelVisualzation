@@ -7,8 +7,8 @@ def analyze_pruning(model, model_id: str = "") -> dict:
     total_params = model.total_params()
 
     for layer in model.layers:
-        weight = layer.weights.get("weight")
-        if weight is None or not hasattr(weight, "shape") or len(weight.shape) < 1:
+        weight = _find_conv_weight(layer)
+        if weight is None:
             continue
         arr = np.asarray(weight, dtype=np.float32)
         channels = _channel_scores(arr)
@@ -65,3 +65,41 @@ def _sparsity_heatmap(arr: np.ndarray) -> list[list[float]]:
         cols = np.array_split(group, min(group.shape[1], 16), axis=1)
         heatmap.append([round(float(np.mean(np.abs(col) < 1e-7)), 4) for col in cols])
     return heatmap
+
+
+def _find_conv_weight(layer):
+    """Find the main weight tensor regardless of key naming convention.
+
+    ONNX initializers use names like 'conv1.weight', while test helpers use 'weight'.
+    We prioritize: 1) key == 'weight', 2) key ending in '.weight',
+    3) the largest ndim>=3 tensor (conv filter), 4) the largest any tensor.
+    """
+    if not layer.weights:
+        return None
+    # Priority 1: exact key "weight"
+    w = layer.weights.get("weight")
+    if w is not None and hasattr(w, "shape") and len(w.shape) >= 2:
+        return w
+    # Priority 2: key ending in ".weight"
+    for key, val in layer.weights.items():
+        if key.endswith(".weight") and hasattr(val, "shape") and len(val.shape) >= 2:
+            return val
+    # Priority 3: largest tensor with ndim >= 3 (conv filter)
+    best = None
+    best_size = 0
+    for val in layer.weights.values():
+        if hasattr(val, "shape") and len(val.shape) >= 3:
+            size = int(np.prod(val.shape))
+            if size > best_size:
+                best_size = size
+                best = val
+    if best is not None:
+        return best
+    # Priority 4: largest any tensor
+    for val in layer.weights.values():
+        if hasattr(val, "shape") and len(val.shape) >= 1:
+            size = int(np.prod(val.shape))
+            if size > best_size:
+                best_size = size
+                best = val
+    return best

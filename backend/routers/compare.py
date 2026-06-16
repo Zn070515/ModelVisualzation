@@ -8,7 +8,7 @@ from ..analyzer.perf import estimate_perf
 from ..analyzer.prune import analyze_pruning
 from ..analyzer.quant import simulate_quantization
 from ..analyzer.report import generate_batch_report
-from .parse import _model_store, get_model
+from .parse import _model_store, _model_paths, get_model
 
 router = APIRouter(prefix="/api", tags=["analysis"])
 
@@ -88,7 +88,8 @@ async def activation(
 ):
     selected = [name.strip() for name in layer_names.split(",")] if layer_names else None
     content = await file.read()
-    return collect_activations(get_model(model_id), content, model_id, selected)
+    model_path = _model_paths.get(model_id)
+    return collect_activations(get_model(model_id), content, model_id, selected, model_path)
 
 
 @router.post("/prune/analyze")

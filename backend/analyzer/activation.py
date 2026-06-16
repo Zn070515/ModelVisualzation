@@ -3,16 +3,25 @@ import io
 import numpy as np
 
 
-def collect_activations(model, sample_bytes: bytes, model_id: str = "", layer_names: list[str] | None = None) -> dict:
+def collect_activations(model, sample_bytes: bytes, model_id: str = "",
+                        layer_names: list[str] | None = None,
+                        model_path: str | None = None) -> dict:
     sample = _load_sample(sample_bytes)
     selected = set(layer_names or [])
     activations = []
 
+    ort_outputs = None
+    if model_path and model_path.endswith(".onnx"):
+        ort_outputs = _run_onnx(model_path, sample)
+
     current = sample
-    for layer in model.layers:
+    for idx, layer in enumerate(model.layers):
         if selected and layer.name not in selected:
             continue
-        current = _synthetic_forward(layer, current)
+        if ort_outputs is not None and idx < len(ort_outputs):
+            current = ort_outputs[idx]
+        else:
+            current = _synthetic_forward(layer, current)
         stats = _stats(current)
         dead = _dead_indices(current)
         activations.append({
@@ -22,6 +31,7 @@ def collect_activations(model, sample_bytes: bytes, model_id: str = "", layer_na
             "dead_neurons_pct": round(100 * len(dead) / max(_channel_count(current), 1), 4),
             "dead_neuron_indices": dead[:100],
             "saturation_pct": round(float(np.mean(np.abs(current) > 6.0) * 100), 4),
+            "method": "onnxruntime" if ort_outputs is not None else "synthetic",
         })
 
     layers_with_dead = sum(1 for item in activations if item["dead_neurons_pct"] > 0)
@@ -34,6 +44,32 @@ def collect_activations(model, sample_bytes: bytes, model_id: str = "", layer_na
             "overall_dead_neuron_pct": round(float(np.mean([item["dead_neurons_pct"] for item in activations])) if activations else 0.0, 4),
         },
     }
+
+
+def _run_onnx(model_path: str, sample: np.ndarray) -> list[np.ndarray] | None:
+    import onnxruntime as ort
+
+    try:
+        session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+        input_info = session.get_inputs()
+        if not input_info:
+            return None
+        input_name = input_info[0].name
+        input_shape = input_info[0].shape
+        # Match sample shape to expected input
+        if hasattr(sample, "reshape") and len(input_shape) > 1:
+            try:
+                batch = sample.reshape(tuple(d if isinstance(d, (int,)) and d > 0 else 1 for d in input_shape)).astype(np.float32)
+            except Exception:
+                batch = sample.reshape((1, -1)).astype(np.float32)
+        else:
+            batch = sample.astype(np.float32)
+        # Run with all layers as intermediate outputs
+        options = ort.RunOptions()
+        outputs = session.run(None, {input_name: batch})
+        return [np.asarray(o, dtype=np.float32) for o in outputs]
+    except Exception:
+        return None
 
 
 def _load_sample(sample_bytes: bytes) -> np.ndarray:

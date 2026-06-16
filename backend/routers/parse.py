@@ -12,6 +12,7 @@ UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads")
 
 _model_store: dict[str, IRModel] = {}
 _model_metas: dict[str, dict] = {}
+_model_paths: dict[str, str] = {}
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -59,6 +60,7 @@ async def upload(file: UploadFile = File(...)):
         raise HTTPException(500, f"Failed to parse model: {str(e)}")
 
     _model_store[file_id] = ir_model
+    _model_paths[file_id] = save_path
     _model_metas[file_id] = {
         "id": file_id,
         "format": ir_model.format,
