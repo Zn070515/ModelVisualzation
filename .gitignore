@@ -4,3 +4,11 @@
 .env
 *.local
 *.pyc
+
+*.log
+*.err
+.*.log
+.*.err
+
+__pycache__/
+backend/uploads/

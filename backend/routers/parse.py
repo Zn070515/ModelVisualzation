@@ -56,7 +56,9 @@ async def upload(file: UploadFile = File(...)):
         ir_model = await loop.run_in_executor(None, _PARSER_MAP[ext], save_path)
         _active_progress[file_id] = 90
     except Exception as e:
+        import traceback
         _active_progress.pop(file_id, None)
+        traceback.print_exc()
         raise HTTPException(500, f"Failed to parse model: {str(e)}")
 
     _model_store[file_id] = ir_model
