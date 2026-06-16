@@ -268,6 +268,7 @@ export interface ActivationResult {
     dead_neurons_pct: number
     dead_neuron_indices: number[]
     saturation_pct: number
+    method: string
   }>
   summary: {
     total_layers_analyzed: number

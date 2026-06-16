@@ -78,11 +78,11 @@ def _find_conv_weight(layer):
         return None
     # Priority 1: exact key "weight"
     w = layer.weights.get("weight")
-    if w is not None and hasattr(w, "shape") and len(w.shape) >= 2:
+    if w is not None and hasattr(w, "shape") and len(w.shape) >= 1:
         return w
     # Priority 2: key ending in ".weight"
     for key, val in layer.weights.items():
-        if key.endswith(".weight") and hasattr(val, "shape") and len(val.shape) >= 2:
+        if key.endswith(".weight") and hasattr(val, "shape") and len(val.shape) >= 1:
             return val
     # Priority 3: largest tensor with ndim >= 3 (conv filter)
     best = None

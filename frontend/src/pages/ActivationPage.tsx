@@ -41,7 +41,7 @@ export default function ActivationPage() {
               <Metric label="Layers analyzed" value={String(result.summary.total_layers_analyzed)} />
               <Metric label="Dead neurons" value={String(result.summary.layers_with_dead_neurons)} />
               <Metric label="Dead neuron %" value={`${result.summary.overall_dead_neuron_pct.toFixed(2)}%`} />
-              <Metric label="Method" value={(result.activations[0] as any)?.method || 'synthetic'} />
+              <Metric label="Method" value={result.activations[0]?.method || 'synthetic'} />
             </div>
             {result.activations.length === 0 && <div style={empty}>No activation data collected</div>}
             {result.activations.map((activation) => (

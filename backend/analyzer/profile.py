@@ -46,9 +46,7 @@ def _conv_flops(layer) -> int:
     n, c_out = out_shape[0], out_shape[1]
     spatial = int(np.prod(out_shape[2:])) if len(out_shape) > 2 else 1
 
-    weight = layer.weights.get("weight")
-    if weight is None and layer.weights:
-        weight = list(layer.weights.values())[0]
+    weight = _find_weight(layer)
     if weight is not None and hasattr(weight, 'shape') and len(weight.shape) >= 2:
         c_in = int(weight.shape[1])
         k = int(np.prod(weight.shape[2:]))
@@ -57,6 +55,21 @@ def _conv_flops(layer) -> int:
         k = 9
 
     return n * c_out * c_in * k * spatial * 2
+
+
+def _find_weight(layer):
+    """Find the main weight tensor — prioritizes 'weight', '.weight' suffix, or largest any tensor."""
+    if not layer.weights:
+        return None
+    w = layer.weights.get("weight")
+    if w is not None and hasattr(w, "shape"):
+        return w
+    for key, val in layer.weights.items():
+        if key.endswith(".weight") and hasattr(val, "shape"):
+            return val
+    if layer.weights:
+        return max(layer.weights.values(), key=lambda v: np.prod(v.shape) if hasattr(v, "shape") else 0, default=None)
+    return None
 
 
 def _linear_flops(layer) -> int:

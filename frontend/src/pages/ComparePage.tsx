@@ -8,16 +8,22 @@ import { formatNum } from '../utils'
 export default function ComparePage() {
   const { aId = '', bId = '' } = useParams<{ aId: string; bId: string }>()
   const [result, setResult] = useState<CompareResult | null>(null)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!aId || !bId) return
     setError(null)
-    compareModels(aId, bId).then(setResult).catch((err) => setError(err.message))
+    setLoading(true)
+    compareModels(aId, bId)
+      .then(setResult)
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false))
   }, [aId, bId])
 
   return (
     <div style={page}>
+      {loading && <div style={loader}>Comparing models...</div>}
       {error && <div style={empty}>{error}</div>}
       {result && (
         <>
@@ -97,4 +103,5 @@ const th = { padding: '6px 8px', borderBottom: '1px solid var(--border)', color:
 const thR = { ...th, textAlign: 'right' as const }
 const cell = { padding: '6px 8px', borderBottom: '1px solid var(--border)', color: 'var(--text-secondary)' }
 const right = { ...cell, textAlign: 'right' as const }
+const loader = { color: 'var(--accent)', fontSize: 13, padding: 12 }
 const empty = { color: 'var(--text-muted)', fontSize: 13, padding: 20 }
