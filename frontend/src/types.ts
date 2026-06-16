@@ -73,3 +73,59 @@ export interface ModelState {
   loading: boolean
   error: string | null
 }
+
+export interface WeightTensorStats {
+  shape: number[]
+  mean: number
+  std: number
+  min: number
+  max: number
+  sparsity: number
+  histogram: {
+    counts: number[]
+    bin_edges: number[]
+  }
+}
+
+export interface WeightLayerStats {
+  layer_name: string
+  op_type: string
+  weights: Record<string, WeightTensorStats>
+}
+
+export interface WeightLayerSummary {
+  layer_name: string
+  op_type: string
+  param_count: number
+  mean: number
+  std: number
+  sparsity: number
+}
+
+export interface WeightOverview {
+  layers: WeightLayerSummary[]
+  global_stats: {
+    total_weight_params: number
+    overall_mean: number
+    overall_std: number
+    overall_sparsity: number
+  }
+}
+
+export interface HealthIssue {
+  layer: string
+  severity: 'warning' | 'critical'
+  type: string
+  message: string
+  detail: Record<string, unknown>
+}
+
+export interface HealthResult {
+  model_id: string
+  issues: HealthIssue[]
+  summary: {
+    total_issues: number
+    critical_count: number
+    warning_count: number
+  }
+}

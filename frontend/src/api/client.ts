@@ -1,4 +1,4 @@
-import type { ModelInfo, GraphData, ProfileData } from '../types'
+import type { ModelInfo, GraphData, ProfileData, WeightLayerStats, WeightOverview, HealthResult } from '../types'
 
 const BASE = '/api'
 
@@ -28,4 +28,16 @@ export async function getModelGraph(id: string): Promise<GraphData> {
 
 export async function getModelProfile(id: string): Promise<ProfileData> {
   return request(`/model/${id}/profile`)
+}
+
+export async function getWeightStats(id: string, layer: string): Promise<WeightLayerStats> {
+  return request(`/model/${id}/weights?layer=${encodeURIComponent(layer)}`)
+}
+
+export async function getWeightOverview(id: string): Promise<WeightOverview> {
+  return request(`/model/${id}/weights/overview`)
+}
+
+export async function getHealthScan(id: string): Promise<HealthResult> {
+  return request(`/model/${id}/health`)
 }
