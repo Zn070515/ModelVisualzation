@@ -1,6 +1,58 @@
+import pickle as _pickle
+import sys as _sys
+import types as _types
+
 import torch
 import numpy as np
 from .ir import IRLayer, IRModel, TensorSpec
+
+
+def _build_forgiving_pickle():
+    """Return a pickle module whose Unpickler creates placeholders for unknown classes.
+
+    When a .pt file references classes from uninstalled packages (e.g. ultralytics),
+    standard ``torch.load`` raises ModuleNotFoundError.  This custom unpickler
+    substitutes a generic ``torch.nn.Module`` subclass that accepts any constructor
+    arguments, so the rest of the state_dict (tensor data) loads normally.
+    """
+
+    class _GenericNNModule(torch.nn.Module):
+        def __init__(self, *args, **kwargs):
+            super().__init__()
+
+    class _ForgivingUnpickler(_pickle.Unpickler):
+        def find_class(self, mod_name, name):
+            try:
+                return super().find_class(mod_name, name)
+            except (ModuleNotFoundError, AttributeError):
+                # Build mock module hierarchy as namespace packages
+                parts = mod_name.split(".")
+                for i in range(1, len(parts) + 1):
+                    sub = ".".join(parts[:i])
+                    if sub not in _sys.modules:
+                        mod = _types.ModuleType(sub)
+                        mod.__path__ = []
+                        _sys.modules[sub] = mod
+                cls = _GenericNNModule
+                cls.__module__ = mod_name
+                setattr(_sys.modules[mod_name], name, cls)
+                return cls
+
+    mod = _types.ModuleType("forgiving_pickle")
+    for attr in dir(_pickle):
+        setattr(mod, attr, getattr(_pickle, attr))
+    mod.Unpickler = _ForgivingUnpickler
+    return mod
+
+
+_forgiving_pickle_module = None
+
+
+def _get_forgiving_pickle():
+    global _forgiving_pickle_module
+    if _forgiving_pickle_module is None:
+        _forgiving_pickle_module = _build_forgiving_pickle()
+    return _forgiving_pickle_module
 
 
 _OP_TYPE_MAP = {
@@ -25,7 +77,13 @@ _OP_TYPE_MAP = {
 
 
 def parse_pytorch(file_path: str) -> IRModel:
-    loaded = torch.load(file_path, map_location="cpu", weights_only=False)
+    try:
+        loaded = torch.load(file_path, map_location="cpu", weights_only=False)
+    except Exception:
+        # Full unpickling failed (e.g. uninstalled package like ultralytics).
+        # Retry with a forgiving pickle that substitutes missing classes.
+        loaded = torch.load(file_path, map_location="cpu", weights_only=False,
+                           pickle_module=_get_forgiving_pickle())
 
     if isinstance(loaded, torch.nn.Module):
         return _parse_module(loaded)
@@ -193,6 +251,14 @@ def _find_state_dict(ckpt: dict) -> dict | None:
         return ckpt["state_dict"]
     if "model" in ckpt and isinstance(ckpt["model"], dict) and _has_weight_keys(ckpt["model"]):
         return ckpt["model"]
+    # YOLO / ultralytics format: keys like "model" / "ema" hold nn.Module objects
+    for key in ("model", "ema"):
+        val = ckpt.get(key)
+        if val is not None and hasattr(val, "state_dict"):
+            sd = val.state_dict()
+            if isinstance(sd, dict) and len(sd) > 0:
+                # Convert torch tensors to numpy
+                return {k: v.cpu().numpy() if hasattr(v, "cpu") else v for k, v in sd.items()}
     # Check any top-level dict values (skip optimizer/auxiliary keys)
     for key, val in ckpt.items():
         if key.lower() in _OPTIMIZER_KEYS:
