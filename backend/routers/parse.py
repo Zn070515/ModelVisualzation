@@ -117,6 +117,23 @@ def model_profile(model_id: str):
     return compute_profile(model)
 
 
+@router.get("/{model_id}/weights/overview")
+def model_weights_overview(model_id: str):
+    model = get_model(model_id)
+    from ..analyzer.weights import compute_weight_overview
+    return compute_weight_overview(model)
+
+
+@router.get("/{model_id}/weights")
+def model_weights_layer(model_id: str, layer: str):
+    model = get_model(model_id)
+    for l in model.layers:
+        if l.name == layer:
+            from ..analyzer.weights import compute_layer_weight_stats
+            return compute_layer_weight_stats(l)
+    raise HTTPException(404, f"Layer {layer} not found")
+
+
 def _make_label(layer) -> str:
     name = layer.op_type
     if layer.params.get("kernel_size"):
