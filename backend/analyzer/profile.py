@@ -46,7 +46,9 @@ def _conv_flops(layer) -> int:
     n, c_out = out_shape[0], out_shape[1]
     spatial = int(np.prod(out_shape[2:])) if len(out_shape) > 2 else 1
 
-    weight = layer.weights.get("weight") or list(layer.weights.values())[0] if layer.weights else None
+    weight = layer.weights.get("weight")
+    if weight is None and layer.weights:
+        weight = list(layer.weights.values())[0]
     if weight is not None and hasattr(weight, 'shape') and len(weight.shape) >= 2:
         c_in = int(weight.shape[1])
         k = int(np.prod(weight.shape[2:]))

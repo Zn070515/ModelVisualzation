@@ -1,4 +1,18 @@
-import type { ModelInfo, GraphData, ProfileData, WeightLayerStats, WeightOverview, HealthResult } from '../types'
+import type {
+  ActivationResult,
+  BatchReport,
+  ChainResult,
+  CompareResult,
+  GraphData,
+  HealthResult,
+  ModelInfo,
+  PerfResult,
+  ProfileData,
+  PruneResult,
+  QuantResult,
+  WeightLayerStats,
+  WeightOverview,
+} from '../types'
 
 const BASE = '/api'
 
@@ -40,4 +54,59 @@ export async function getWeightOverview(id: string): Promise<WeightOverview> {
 
 export async function getHealthScan(id: string): Promise<HealthResult> {
   return request(`/model/${id}/health`)
+}
+
+export async function compareModels(modelAId: string, modelBId: string): Promise<CompareResult> {
+  return request('/compare', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model_a_id: modelAId, model_b_id: modelBId }),
+  })
+}
+
+export async function traceChain(modelIds: string[], labels?: string[]): Promise<ChainResult> {
+  return request('/chain', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model_ids: modelIds, labels: labels ?? [] }),
+  })
+}
+
+export async function generateReport(modelIds: string[], format: 'json' | 'html' = 'json'): Promise<BatchReport> {
+  return request('/report/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model_ids: modelIds, format }),
+  })
+}
+
+export async function estimatePerf(id: string, hardware: 'cpu' | 'gpu' | 'edge_tpu'): Promise<PerfResult> {
+  return request(`/model/${id}/perf`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ hardware }),
+  })
+}
+
+export async function simulateQuant(id: string, bits: 8 | 16): Promise<QuantResult> {
+  return request('/quant/simulate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model_id: id, bits }),
+  })
+}
+
+export async function getActivation(id: string, file: File, layerNames?: string[]): Promise<ActivationResult> {
+  const form = new FormData()
+  form.append('file', file)
+  if (layerNames?.length) form.append('layer_names', layerNames.join(','))
+  return request(`/model/${id}/activation`, { method: 'POST', body: form })
+}
+
+export async function analyzePrune(id: string): Promise<PruneResult> {
+  return request('/prune/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model_id: id }),
+  })
 }

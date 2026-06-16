@@ -12,7 +12,9 @@ app.add_middleware(
 )
 
 from .routers.parse import router as parse_router
+from .routers.compare import router as compare_router
 app.include_router(parse_router)
+app.include_router(compare_router)
 
 
 @app.get("/api/health")
