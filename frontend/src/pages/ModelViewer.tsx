@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useStore } from '../store'
+import ModelLayout from '../components/ModelLayout'
 import GraphCanvas from '../components/GraphCanvas'
 import LayerTree from '../components/LayerTree'
 import NodePanel from '../components/NodePanel'
-import StatusBar from '../components/StatusBar'
 
 export default function ModelViewer() {
   const { modelId } = useParams<{ modelId: string }>()
@@ -65,36 +65,8 @@ export default function ModelViewer() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      {/* Top bar */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '8px 16px',
-        background: 'var(--bg-secondary)',
-        borderBottom: '1px solid var(--border)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={() => navigate('/')}
-            style={{
-              background: 'none', border: 'none', color: 'var(--text-secondary)',
-              cursor: 'pointer', fontSize: 16,
-            }}>
-            ←
-          </button>
-          <span style={{ fontWeight: 600, fontSize: 14 }}>
-            {model.info?.file_name || '模型查看'}
-          </span>
-          <span style={{
-            fontSize: 10, padding: '2px 8px', borderRadius: 10,
-            background: 'var(--bg-tertiary)', color: 'var(--accent)',
-          }}>
-            {model.info?.format?.toUpperCase()}
-          </span>
-        </div>
-      </div>
-
-      {/* Main content: 3-column */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+    <ModelLayout modelId={modelId} activeTab="viewer">
+      <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
         {/* Left: Layer tree */}
         <div style={{
           width: 260, flexShrink: 0,
@@ -130,9 +102,6 @@ export default function ModelViewer() {
           />
         </div>
       </div>
-
-      {/* Bottom: Status bar */}
-      <StatusBar info={model.info} profile={model.profile} />
-    </div>
+    </ModelLayout>
   )
 }
