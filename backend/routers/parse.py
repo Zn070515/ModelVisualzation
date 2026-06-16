@@ -134,6 +134,13 @@ def model_weights_layer(model_id: str, layer: str):
     raise HTTPException(404, f"Layer {layer} not found")
 
 
+@router.get("/{model_id}/health")
+def model_health(model_id: str):
+    model = get_model(model_id)
+    from ..analyzer.health import health_check
+    return health_check(model)
+
+
 def _make_label(layer) -> str:
     name = layer.op_type
     if layer.params.get("kernel_size"):
