@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import {
   ReactFlow,
-  Node,
-  Edge,
   Controls,
   MiniMap,
   Background,
@@ -13,26 +11,10 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import type { GraphData } from '../types'
-
-const OP_COLORS: Record<string, string> = {
-  Conv2d: '#7aa2f7', Conv1d: '#7aa2f7', ConvTranspose2d: '#7aa2f7',
-  BatchNorm2d: '#e0af68', BatchNorm1d: '#e0af68',
-  ReLU: '#bb9af7', LeakyReLU: '#bb9af7', Sigmoid: '#bb9af7',
-  Tanh: '#bb9af7', Softmax: '#bb9af7', ReLU6: '#bb9af7',
-  MaxPool2d: '#73daca', AvgPool2d: '#73daca', AdaptiveAvgPool2d: '#73daca',
-  Linear: '#f7768e', Flatten: '#f7768e',
-  Concat: '#ff9e64', Add: '#ff9e64', Mul: '#ff9e64',
-}
-
-function getColor(opType: string): string {
-  for (const [key, color] of Object.entries(OP_COLORS)) {
-    if (opType.toLowerCase().includes(key.toLowerCase())) return color
-  }
-  return '#565f89'
-}
+import { getOpColor } from '../constants'
 
 function ModelNode({ data }: NodeProps) {
-  const color = getColor(data.opType as string)
+  const color = getOpColor(data.opType as string)
   return (
     <div style={{
       padding: '8px 16px',
@@ -74,17 +56,17 @@ export default function GraphCanvas({ graphData, onNodeClick }: Props) {
     return graphData.edges
   }, [graphData])
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes as Node[])
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges as Edge[])
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
 
   // Reset when graphData changes
   useEffect(() => {
-    setNodes(initialNodes as Node[])
-    setEdges(initialEdges as Edge[])
+    setNodes(initialNodes)
+    setEdges(initialEdges)
   }, [initialNodes, initialEdges, setNodes, setEdges])
 
   const handleNodeClick = useCallback(
-    (_: React.MouseEvent, node: Node) => onNodeClick(node.id),
+    (_: React.MouseEvent, node: { id: string }) => onNodeClick(node.id),
     [onNodeClick],
   )
 
@@ -118,7 +100,7 @@ export default function GraphCanvas({ graphData, onNodeClick }: Props) {
     >
       <Controls />
       <MiniMap
-        nodeColor={(n) => getColor((n.data?.opType as string) || '')}
+        nodeColor={(n) => getOpColor((n.data?.opType as string) || '')}
         style={{ background: 'var(--bg-tertiary)' }}
       />
       <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#252540" />

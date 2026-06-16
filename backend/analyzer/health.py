@@ -1,14 +1,14 @@
 import numpy as np
 
 
-def health_check(ir_model) -> dict:
+def health_check(ir_model, model_id: str = "") -> dict:
     issues = []
 
     for layer in ir_model.layers:
         _check_weight_outliers(layer, issues)
         _check_high_sparsity(layer, issues)
 
-        if "BatchNorm" in layer.op_type or "bn" in layer.op_type.lower():
+        if "batchnorm" in layer.op_type.lower():
             _check_bn_anomaly(layer, issues)
 
         if layer.weights:
@@ -18,7 +18,7 @@ def health_check(ir_model) -> dict:
     warning = len([i for i in issues if i["severity"] == "warning"])
 
     return {
-        "model_id": ir_model.format,
+        "model_id": model_id,
         "issues": issues,
         "summary": {
             "total_issues": len(issues),

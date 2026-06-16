@@ -66,7 +66,6 @@ def compute_weight_overview(ir_model) -> dict:
                 "sparsity": round(avg_sparsity, 4),
             })
 
-    n = len(all_means) if all_means else 1
     return {
         "layers": layer_summaries,
         "global_stats": {

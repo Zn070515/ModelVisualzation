@@ -12,11 +12,19 @@ const HISTO_COLORS = ['#7aa2f7', '#e0af68', '#bb9af7', '#73daca', '#f7768e', '#f
 export default function WeightsPage() {
   const { modelId } = useParams<{ modelId: string }>()
   const model = useStore((s) => (modelId ? s.models[modelId] : undefined))
+  const loadModelData = useStore((s) => s.loadModelData)
 
   const [overview, setOverview] = useState<WeightLayerSummary[] | null>(null)
   const [selectedLayer, setSelectedLayer] = useState<string | null>(null)
   const [layerStats, setLayerStats] = useState<WeightLayerStats | null>(null)
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!modelId) return
+    if (!model || (!model.graph && !model.loading)) {
+      loadModelData(modelId)
+    }
+  }, [modelId])
 
   useEffect(() => {
     if (!modelId) return

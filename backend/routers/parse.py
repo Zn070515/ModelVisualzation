@@ -138,7 +138,7 @@ def model_weights_layer(model_id: str, layer: str):
 def model_health(model_id: str):
     model = get_model(model_id)
     from ..analyzer.health import health_check
-    return health_check(model)
+    return health_check(model, model_id)
 
 
 def _make_label(layer) -> str:

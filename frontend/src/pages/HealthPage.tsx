@@ -21,11 +21,19 @@ const TYPE_LABELS: Record<string, string> = {
 export default function HealthPage() {
   const { modelId } = useParams<{ modelId: string }>()
   const model = useStore((s) => (modelId ? s.models[modelId] : undefined))
+  const loadModelData = useStore((s) => s.loadModelData)
 
   const [health, setHealth] = useState<HealthResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [expandedIssue, setExpandedIssue] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!modelId) return
+    if (!model || (!model.graph && !model.loading)) {
+      loadModelData(modelId)
+    }
+  }, [modelId])
 
   useEffect(() => {
     if (!modelId) return

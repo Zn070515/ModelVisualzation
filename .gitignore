@@ -1,0 +1,6 @@
+.venv
+.superpowers
+
+.env
+*.local
+*.pyc

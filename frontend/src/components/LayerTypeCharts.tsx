@@ -1,21 +1,6 @@
 import ReactECharts from 'echarts-for-react'
 import type { ProfileData } from '../types'
-
-const TYPE_COLORS: Record<string, string> = {
-  Conv2d: '#7aa2f7', Conv1d: '#7aa2f7', ConvTranspose2d: '#7aa2f7',
-  BatchNorm2d: '#e0af68', BatchNorm1d: '#e0af68',
-  ReLU: '#bb9af7', LeakyReLU: '#bb9af7', Sigmoid: '#bb9af7', Tanh: '#bb9af7', Softmax: '#bb9af7',
-  MaxPool2d: '#73daca', AvgPool2d: '#73daca', AdaptiveAvgPool2d: '#73daca',
-  Linear: '#f7768e', Flatten: '#f7768e', Dropout: '#f7768e',
-  Concat: '#ff9e64', Add: '#ff9e64', Mul: '#ff9e64',
-}
-
-function getTypeColor(opType: string): string {
-  for (const [key, color] of Object.entries(TYPE_COLORS)) {
-    if (opType.toLowerCase().includes(key.toLowerCase())) return color
-  }
-  return '#565f89'
-}
+import { getOpColor } from '../constants'
 
 interface Props {
   profile: ProfileData
@@ -52,7 +37,7 @@ export default function LayerTypeCharts({ profile }: Props) {
       data: types.map(([name, d]) => ({
         name,
         value: d.count,
-        itemStyle: { color: getTypeColor(name) },
+        itemStyle: { color: getOpColor(name) },
       })),
       label: { show: false },
       emphasis: { label: { show: true, fontSize: 10 } },
@@ -82,9 +67,9 @@ export default function LayerTypeCharts({ profile }: Props) {
     series: [{
       name: '参数量',
       type: 'bar' as const,
-      data: types.map(([, d]) => ({
+      data: types.map(([name, d]) => ({
         value: d.params,
-        itemStyle: { color: getTypeColor(types[0][0]) },
+        itemStyle: { color: getOpColor(name) },
       })),
       itemStyle: { borderRadius: [4, 4, 0, 0] },
     }],
@@ -95,9 +80,9 @@ export default function LayerTypeCharts({ profile }: Props) {
     series: [{
       name: 'FLOPs',
       type: 'bar' as const,
-      data: types.map(([, d]) => ({
+      data: types.map(([name, d]) => ({
         value: d.flops,
-        itemStyle: { color: getTypeColor(types[0][0]) },
+        itemStyle: { color: getOpColor(name) },
       })),
       itemStyle: { borderRadius: [4, 4, 0, 0] },
     }],

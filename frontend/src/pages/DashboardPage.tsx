@@ -1,26 +1,23 @@
+import { useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { useStore } from '../store'
 import ModelLayout from '../components/ModelLayout'
 import LayerTypeCharts from '../components/LayerTypeCharts'
-
-function formatNum(n: number): string {
-  if (n >= 1e9) return (n / 1e9).toFixed(2) + 'G'
-  if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M'
-  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K'
-  return String(n)
-}
-
-function formatSize(n: number): string {
-  if (n >= 1e6) return (n / 1e6).toFixed(2) + ' MB'
-  if (n >= 1e3) return (n / 1e3).toFixed(1) + ' KB'
-  return n + ' B'
-}
+import { formatNum, formatBytes } from '../utils'
 
 export default function DashboardPage() {
   const { modelId } = useParams<{ modelId: string }>()
   const model = useStore((s) => (modelId ? s.models[modelId] : undefined))
+  const loadModelData = useStore((s) => s.loadModelData)
   const profile = model?.profile
   const info = model?.info
+
+  useEffect(() => {
+    if (!modelId) return
+    if (!model || (!model.graph && !model.loading)) {
+      loadModelData(modelId)
+    }
+  }, [modelId])
 
   if (!profile) {
     return (
@@ -40,7 +37,7 @@ export default function DashboardPage() {
     { label: '总 FLOPs', value: formatNum(profile.total_flops), color: '#bb9af7' },
     { label: '显存估算', value: profile.memory_mb.toFixed(2) + ' MB', color: '#73daca' },
     { label: '总层数', value: String(info?.layer_count || profile.layers.length), color: '#e0af68' },
-    { label: '文件大小', value: info ? formatSize(info.file_size_bytes) : '-', color: '#f7768e' },
+    { label: '文件大小', value: info ? formatBytes(info.file_size_bytes) : '-', color: '#f7768e' },
     { label: '格式', value: info?.format?.toUpperCase() || '-', color: '#ff9e64' },
   ]
 
