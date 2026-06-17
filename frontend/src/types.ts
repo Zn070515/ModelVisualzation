@@ -282,6 +282,31 @@ export interface ActivationResult {
   }
 }
 
+export interface AttentionHeadSlice {
+  head_index: number
+  shape: number[]
+  values: number[][]
+}
+
+export interface AttentionProjection {
+  shape: number[]
+  head_slices: AttentionHeadSlice[]
+}
+
+export interface AttentionLayerData {
+  layer_name: string
+  op_type: string
+  num_heads: number
+  head_dim: number
+  embed_dim: number
+  projections: Record<string, AttentionProjection>
+}
+
+export interface AttentionResponse {
+  model_id: string
+  layers: AttentionLayerData[]
+}
+
 export interface PruneResult {
   model_id: string
   layers: Array<{

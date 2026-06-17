@@ -1,5 +1,6 @@
 import type {
   ActivationResult,
+  AttentionResponse,
   BatchReport,
   ChainResult,
   CompareResult,
@@ -102,6 +103,10 @@ export async function getActivation(id: string, file: File, layerNames?: string[
   form.append('file', file)
   if (layerNames?.length) form.append('layer_names', layerNames.join(','))
   return request(`/model/${id}/activation`, { method: 'POST', body: form })
+}
+
+export async function getAttention(id: string): Promise<AttentionResponse> {
+  return request(`/model/${id}/attention`)
 }
 
 export async function analyzePrune(id: string): Promise<PruneResult> {

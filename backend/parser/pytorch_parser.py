@@ -73,6 +73,7 @@ _OP_TYPE_MAP = {
     torch.nn.Flatten: "Flatten",
     torch.nn.Softmax: "Softmax",
     torch.nn.Upsample: "Upsample",
+    torch.nn.MultiheadAttention: "MultiheadAttention",
 }
 
 
@@ -408,6 +409,8 @@ def _infer_op_type(name: str, weights: dict) -> str:
     name_lower = name.lower()
 
     # Named patterns
+    if any(kw in name_lower for kw in ("attention", "self_attn", "attn", "cross_attn")):
+        return "Attention"
     if "fc" in name_lower or "linear" in name_lower or "dense" in name_lower:
         return "Linear"
     if "conv" in name_lower:

@@ -1,26 +1,26 @@
-import { useState, useMemo } from 'react'
+import { useMemo } from 'react'
 import type { GraphData } from '../types'
 
 interface Props {
   graphData: GraphData | null
   selectedNodeId: string | null
   onSelect: (nodeId: string) => void
+  searchText: string
+  onSearchChange: (text: string) => void
 }
 
-export default function LayerTree({ graphData, selectedNodeId, onSelect }: Props) {
-  const [search, setSearch] = useState('')
-
+export default function LayerTree({ graphData, selectedNodeId, onSelect, searchText, onSearchChange }: Props) {
   const filteredNodes = useMemo(() => {
     if (!graphData) return []
-    if (!search.trim()) return graphData.nodes
-    const q = search.toLowerCase()
+    if (!searchText.trim()) return graphData.nodes
+    const q = searchText.toLowerCase()
     return graphData.nodes.filter(
       (n) =>
         n.id.toLowerCase().includes(q) ||
         (n.data.opType as string).toLowerCase().includes(q) ||
         (n.data.label as string).toLowerCase().includes(q),
     )
-  }, [graphData, search])
+  }, [graphData, searchText])
 
   if (!graphData) {
     return (
@@ -35,8 +35,8 @@ export default function LayerTree({ graphData, selectedNodeId, onSelect }: Props
       <div style={{ padding: 8 }}>
         <input
           placeholder="搜索层..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchText}
+          onChange={(e) => onSearchChange(e.target.value)}
           style={{
             width: '100%', padding: '6px 10px',
             background: 'var(--bg-tertiary)', border: '1px solid var(--border)',

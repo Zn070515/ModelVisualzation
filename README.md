@@ -34,7 +34,10 @@ All parsers convert to a unified IR (`IRModel` / `IRLayer` / `TensorSpec` frozen
 ### Phase 1 — Model Upload & Graph Viewer
 
 - Upload `.pt`, `.pth`, `.onnx`, `.tflite` files
-- Interactive node-link graph (React Flow) with layout, zoom, drag
+- Interactive node-link graph (React Flow v12) with layout, zoom, drag, search/filter
+- **Node search & filter** — type to highlight matching nodes, dim non-matching ones in both the layer tree and graph canvas
+- **Data overlays** — color-code graph nodes by param count, FLOPs, sparsity, or latency with a heatmap gradient
+- **Layer folding** — automatically group 3+ consecutive same-type layers into collapsible blocks
 - Collapsible 3-column layout
 - Basic model profile (params, FLOPs, memory)
 
@@ -56,6 +59,7 @@ All parsers convert to a unified IR (`IRModel` / `IRLayer` / `TensorSpec` frozen
 - **Quantization Simulation** — INT4/INT8/FP16, per-tensor and per-channel modes, unsigned quantization, RMSE/SNR/per-channel error
 - **Activation Analysis** — real inference via ONNX Runtime (modified-graph intermediate outputs), PyTorch (forward hooks), and TFLite (interpreter), with dead neuron and saturation detection; falls back to synthetic forward for unsupported formats
 - **Pruning Assist** — multi-signal channel importance: L1 norm, L2 norm, Fisher information (E[w²]), optional activation sensitivity, weighted combined score, prune priority ranking
+- **Attention Head Visualization** — for Transformer models, extract Q/K/V projection weights, infer head dimensions, render per-head heatmaps; supports `nn.MultiheadAttention` and HuggingFace-style attention modules
 
 ## Getting Started
 
@@ -117,6 +121,7 @@ cd frontend && npx tsc --noEmit
 | POST | `/api/quant/simulate` | Quantization simulation (bits, mode, per-channel) |
 | POST | `/api/model/{id}/activation` | Activation analysis with real inference (multipart) |
 | POST | `/api/prune/analyze` | Channel importance + pruning recommendations |
+| GET | `/api/model/{id}/attention` | Attention head projection weights |
 | GET | `/api/health` | Backend health check |
 
 All POST endpoints accept and return JSON validated against Pydantic models. See `backend/models.py` for the full type definitions.
@@ -144,6 +149,7 @@ ModelVisualzation/
 │   │   ├── quant.py              INT4/INT8/FP16 quantization simulation
 │   │   ├── activation.py         ONNX / PyTorch hooks / TFLite interpreter inference
 │   │   ├── prune.py              Fisher + L1/L2 + activation channel importance
+│   │   ├── attention.py          Attention head weight extraction & visualization
 │   │   └── report.py             Batch report generator (JSON + HTML)
 │   ├── routers/
 │   │   ├── parse.py              Upload, model info, graph, profile (7 endpoints)
@@ -177,7 +183,8 @@ ModelVisualzation/
 │       │   ├── PerformancePage.tsx
 │       │   ├── QuantPage.tsx
 │       │   ├── ActivationPage.tsx
-│       │   └── PrunePage.tsx
+│       │   ├── PrunePage.tsx
+│       │   └── AttentionPage.tsx
 │       └── components/
 │           ├── ModelLayout.tsx   Tabbed model wrapper
 │           ├── ModelTabs.tsx     Navigation tabs
@@ -187,7 +194,11 @@ ModelVisualzation/
 │           ├── LatencyBarChart.tsx
 │           ├── QuantHeatmap.tsx
 │           ├── ActivationHistogram.tsx
-│           └── ImportanceChart.tsx
+│           ├── ImportanceChart.tsx
+│           ├── AttentionHeatmap.tsx
+│           └── GroupNode.tsx
+├── utils/
+│   └── graphGroups.ts           Layer folding block detection
 └── docs/
     └── superpowers/
         ├── plans/                Implementation plans (phase 1–4)

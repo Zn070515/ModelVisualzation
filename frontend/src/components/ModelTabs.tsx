@@ -10,6 +10,7 @@ const TABS = [
   { key: 'quant', label: 'Quant', path: (id: string) => `/quant/${id}` },
   { key: 'activation', label: 'Act', path: (id: string) => `/activation/${id}` },
   { key: 'prune', label: 'Prune', path: (id: string) => `/prune/${id}` },
+  { key: 'attention', label: 'Attn', path: (id: string) => `/attention/${id}` },
 ]
 
 interface Props {

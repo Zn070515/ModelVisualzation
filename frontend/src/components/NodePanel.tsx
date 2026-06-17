@@ -1,11 +1,20 @@
 import type { GraphData } from '../types'
+import type { NodeMetric } from './GraphCanvas'
 
 interface Props {
   graphData: GraphData | null
   selectedNodeId: string | null
+  colorMetric?: string
+  nodeMetrics?: NodeMetric[]
+  profile?: { layers: Array<{ name: string; params_count: number; flops: number }> } | null
 }
 
-export default function NodePanel({ graphData, selectedNodeId }: Props) {
+const METRIC_LABELS: Record<string, string> = {
+  params: 'Param count',
+  flops: 'FLOPs',
+}
+
+export default function NodePanel({ graphData, selectedNodeId, colorMetric, nodeMetrics, profile }: Props) {
   if (!selectedNodeId || !graphData) {
     return (
       <div style={{
@@ -26,6 +35,10 @@ export default function NodePanel({ graphData, selectedNodeId }: Props) {
 
   const { data } = node
 
+  // Look up profile data for this layer
+  const layerProfile = profile?.layers?.find((l) => l.name === node.id)
+  const metricValue = nodeMetrics?.find((m) => m.nodeId === node.id)
+
   return (
     <div style={{ padding: 12, overflowY: 'auto', height: '100%' }}>
       <h3 style={{
@@ -37,6 +50,20 @@ export default function NodePanel({ graphData, selectedNodeId }: Props) {
       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
         {node.id}
       </div>
+
+      {(layerProfile || metricValue) && (
+        <div style={metricBox}>
+          {layerProfile && <MetricRow label="Params" value={(layerProfile.params_count).toLocaleString()} />}
+          {layerProfile && <MetricRow label="FLOPs" value={(layerProfile.flops).toLocaleString()} />}
+          {colorMetric && metricValue && (
+            <MetricRow
+              label={METRIC_LABELS[colorMetric] || colorMetric}
+              value={metricValue.label}
+              highlight
+            />
+          )}
+        </div>
+      )}
 
       {Object.keys(data.params).length > 0 && (
         <>
@@ -96,3 +123,22 @@ export default function NodePanel({ graphData, selectedNodeId }: Props) {
     </div>
   )
 }
+
+function MetricRow({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+  return (
+    <div style={{
+      display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 11,
+    }}>
+      <span style={{ color: highlight ? 'var(--accent)' : 'var(--text-secondary)' }}>{label}</span>
+      <span style={{
+        color: highlight ? 'var(--accent)' : 'var(--accent-green)',
+        fontFamily: "'JetBrains Mono', monospace",
+        fontWeight: highlight ? 700 : 400,
+      }}>
+        {value}
+      </span>
+    </div>
+  )
+}
+
+const metricBox = { background: 'var(--bg-tertiary)', borderRadius: 6, padding: '8px 10px', marginBottom: 10 }

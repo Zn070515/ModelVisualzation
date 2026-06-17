@@ -11,6 +11,7 @@ import ComparePage from './pages/ComparePage'
 import PerformancePage from './pages/PerformancePage'
 import PrunePage from './pages/PrunePage'
 import QuantPage from './pages/QuantPage'
+import AttentionPage from './pages/AttentionPage'
 
 function App() {
   return (
@@ -28,6 +29,7 @@ function App() {
         <Route path="/quant/:modelId" element={<QuantPage />} />
         <Route path="/activation/:modelId" element={<ActivationPage />} />
         <Route path="/prune/:modelId" element={<PrunePage />} />
+        <Route path="/attention/:modelId" element={<AttentionPage />} />
       </Routes>
     </BrowserRouter>
   )

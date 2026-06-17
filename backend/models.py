@@ -463,6 +463,31 @@ class BatchReportResponse(BaseModel):
     html: str | None = None
 
 
+class AttentionHeadSlice(BaseModel):
+    head_index: int
+    shape: list[int]
+    values: list[list[float]]
+
+
+class AttentionProjection(BaseModel):
+    shape: list[int]
+    head_slices: list[AttentionHeadSlice]
+
+
+class AttentionLayerData(BaseModel):
+    layer_name: str
+    op_type: str
+    num_heads: int
+    head_dim: int
+    embed_dim: int
+    projections: dict[str, AttentionProjection]
+
+
+class AttentionResponse(BaseModel):
+    model_id: str
+    layers: list[AttentionLayerData]
+
+
 class HealthStatus(BaseModel):
     status: str
 

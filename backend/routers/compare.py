@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from ..analyzer.activation import collect_activations
+from ..analyzer.attention import extract_attention
 from ..analyzer.chain import trace_conversion_chain
 from ..analyzer.compare import compare_models
 from ..analyzer.perf import estimate_perf
@@ -11,6 +12,7 @@ from ..analyzer.quant import simulate_quantization
 from ..analyzer.report import generate_batch_report
 from ..models import (
     ActivationResponse,
+    AttentionResponse,
     BatchReportResponse,
     ChainResponse,
     CompareRequest,
@@ -85,7 +87,15 @@ async def activation(
     selected = [name.strip() for name in layer_names.split(",")] if layer_names else None
     content = await file.read()
     model_path = _model_paths.get(model_id)
-    return collect_activations(get_model(model_id), content, model_id, selected, model_path)
+    try:
+        return collect_activations(get_model(model_id), content, model_id, selected, model_path)
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(400, f"Failed to run activation analysis: {exc}") from exc
+
+
+@router.get("/model/{model_id}/attention", response_model=AttentionResponse)
+def model_attention(model_id: str):
+    return extract_attention(get_model(model_id), model_id)
 
 
 @router.post("/prune/analyze", response_model=PruneResponse)

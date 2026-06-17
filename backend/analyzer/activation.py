@@ -237,10 +237,23 @@ def _find_tflite_output(outputs: dict[str, np.ndarray], layer, idx: int) -> np.n
 
 
 def _load_sample(sample_bytes: bytes) -> np.ndarray:
-    try:
-        arr = np.load(io.BytesIO(sample_bytes), allow_pickle=False)
-    except (ValueError, OSError):
-        arr = np.frombuffer(sample_bytes, dtype=np.float32)
+    arr = None
+    # Check for .npy magic bytes
+    is_npy = sample_bytes[:6] == b'\x93NUMPY'
+    if is_npy:
+        try:
+            arr = np.load(io.BytesIO(sample_bytes), allow_pickle=False)
+        except (ValueError, OSError):
+            arr = None
+    if arr is None:
+        # Pad to multiple of 4 bytes for float32 alignment
+        padding = (4 - len(sample_bytes) % 4) % 4
+        if padding:
+            sample_bytes = sample_bytes + b'\x00' * padding
+        try:
+            arr = np.frombuffer(sample_bytes, dtype=np.float32)
+        except ValueError:
+            arr = np.zeros((1, 1), dtype=np.float32)
 
     # Handle structured arrays (e.g. probability distributions with named fields)
     if hasattr(arr, "dtype") and arr.dtype.names is not None:
@@ -280,6 +293,7 @@ def _synthetic_forward(layer, arr: np.ndarray) -> np.ndarray:
 def _stats(arr: np.ndarray) -> dict:
     hist = np.histogram(arr.ravel(), bins=50)
     return {
+        "shape": [int(dim) for dim in arr.shape],
         "mean": round(float(np.mean(arr)), 8),
         "std": round(float(np.std(arr)), 8),
         "min": round(float(np.min(arr)), 8),
