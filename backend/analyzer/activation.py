@@ -1,4 +1,5 @@
 import io
+import os
 
 import numpy as np
 
@@ -11,8 +12,17 @@ def collect_activations(model, sample_bytes: bytes, model_id: str = "",
     activations = []
 
     ort_outputs = None
-    if model_path and model_path.endswith(".onnx"):
-        ort_outputs = _run_onnx_with_intermediate(model_path, sample)
+    pytorch_outputs = None
+    tflite_outputs = None
+
+    if model_path:
+        ext = os.path.splitext(model_path)[1].lower()
+        if ext == ".onnx":
+            ort_outputs = _run_onnx_with_intermediate(model_path, sample)
+        elif ext in (".pt", ".pth"):
+            pytorch_outputs = _run_pytorch_hook_forward(model_path, sample)
+        elif ext == ".tflite":
+            tflite_outputs = _run_tflite_interpreter(model_path, sample)
 
     current = sample
     for idx, layer in enumerate(model.layers):
@@ -21,6 +31,17 @@ def collect_activations(model, sample_bytes: bytes, model_id: str = "",
         if ort_outputs is not None and layer.name in ort_outputs:
             current = ort_outputs[layer.name]
             method = "onnxruntime"
+        elif pytorch_outputs is not None and layer.name in pytorch_outputs:
+            current = pytorch_outputs[layer.name]
+            method = "pytorch_hook"
+        elif tflite_outputs is not None:
+            match = _find_tflite_output(tflite_outputs, layer, idx)
+            if match is not None:
+                current = match
+                method = "tflite_interpreter"
+            else:
+                current = _synthetic_forward(layer, current)
+                method = "synthetic"
         else:
             current = _synthetic_forward(layer, current)
             method = "synthetic"
@@ -57,7 +78,6 @@ def _run_onnx_with_intermediate(model_path: str, sample: np.ndarray) -> dict[str
         proto = onnx.load(model_path)
         graph = proto.graph
 
-        # Collect all intermediate node output names and add them as graph outputs
         existing_outputs = {o.name for o in graph.output}
         for node in graph.node:
             for output_name in node.output:
@@ -68,9 +88,7 @@ def _run_onnx_with_intermediate(model_path: str, sample: np.ndarray) -> dict[str
                     graph.output.append(value_info)
                     existing_outputs.add(output_name)
 
-        # Save temp model with all intermediate outputs
         import tempfile
-        import os
         fd, tmp_path = tempfile.mkstemp(suffix=".onnx")
         os.close(fd)
         onnx.save(proto, tmp_path)
@@ -104,6 +122,118 @@ def _run_onnx_with_intermediate(model_path: str, sample: np.ndarray) -> dict[str
         return None
 
 
+def _run_pytorch_hook_forward(model_path: str, sample: np.ndarray) -> dict[str, np.ndarray] | None:
+    try:
+        import torch
+        loaded = torch.load(model_path, map_location="cpu", weights_only=False)
+    except Exception:
+        return None
+
+    if isinstance(loaded, dict):
+        return None
+    model = loaded if isinstance(loaded, torch.nn.Module) else None
+    if model is None:
+        return None
+
+    outputs: dict[str, np.ndarray] = {}
+    hooks = []
+
+    def make_hook(name):
+        def hook(module, inp, out):
+            if out is not None:
+                t = out if isinstance(out, torch.Tensor) else out[0] if isinstance(out, (tuple, list)) else out
+                if isinstance(t, torch.Tensor):
+                    outputs[name] = t.detach().cpu().numpy().astype(np.float32)
+        return hook
+
+    for name, module in model.named_modules():
+        if name:
+            hooks.append(module.register_forward_hook(make_hook(name)))
+
+    try:
+        model.eval()
+        with torch.no_grad():
+            if sample.ndim <= 3:
+                inp = torch.from_numpy(sample).float().unsqueeze(0)
+            else:
+                inp = torch.from_numpy(sample).float()
+            model(inp)
+    except Exception:
+        pass
+    finally:
+        for h in hooks:
+            h.remove()
+    return outputs if outputs else None
+
+
+def _run_tflite_interpreter(model_path: str, sample: np.ndarray) -> dict[str, np.ndarray] | None:
+    try:
+        import tensorflow as tf
+    except ImportError:
+        return None
+
+    try:
+        interpreter = tf.lite.Interpreter(model_path=model_path)
+        interpreter.allocate_tensors()
+        tensor_details = interpreter.get_tensor_details()
+        input_details = interpreter.get_input_details()
+
+        if not input_details:
+            return None
+
+        inp = sample.astype(np.float32)
+        inp_shape = input_details[0]["shape"]
+        try:
+            if len(inp.shape) < len(inp_shape):
+                reshape_target = [d if d > 0 else 1 for d in inp_shape]
+                inp = inp.reshape(reshape_target)
+        except Exception:
+            pass
+        interpreter.set_tensor(input_details[0]["index"], inp)
+        interpreter.invoke()
+
+        outputs = {}
+        for d in tensor_details:
+            name = d.get("name") or f"tensor_{d['index']}"
+            outputs[name] = interpreter.get_tensor(d["index"]).astype(np.float32)
+        return outputs
+    except Exception:
+        return None
+
+
+def _find_tflite_output(outputs: dict[str, np.ndarray], layer, idx: int) -> np.ndarray | None:
+    """Match a TFLite tensor output to an IR layer by name or operator index."""
+    # TFLite tensor names may be prefixed differently, try multiple patterns
+    candidates = [
+        layer.name,
+        f"{layer.op_type}_{idx}",
+        # Common TFLite naming patterns
+        f"sequential/{layer.name}/output",
+        f"sequential/{layer.name}/BiasAdd",
+        f"sequential/{layer.name}/Relu",
+        layer.name.replace("CONV_2D_", "sequential/conv2d_"),
+    ]
+    # Also try matching against actual output tensor names
+    for op_output_name in layer.outputs:
+        candidates.append(op_output_name)
+
+    for key, value in outputs.items():
+        key_lower = key.lower()
+        for cand in candidates:
+            if cand and cand.lower() in key_lower:
+                return np.asarray(value, dtype=np.float32)
+        # Also try: layer name parts embedded in key
+        if layer.name.lower() in key_lower.replace("/", " ").replace("_", " "):
+            return np.asarray(value, dtype=np.float32)
+
+    # Fallback: match by operator index
+    suffix = f"_output_{idx}"
+    for key, value in outputs.items():
+        if key.endswith(suffix) or f"_{idx}" in key.rsplit("/", 1)[-1]:
+            return np.asarray(value, dtype=np.float32)
+    return None
+
+
 def _load_sample(sample_bytes: bytes) -> np.ndarray:
     try:
         arr = np.load(io.BytesIO(sample_bytes), allow_pickle=False)
@@ -118,7 +248,6 @@ def _load_sample(sample_bytes: bytes) -> np.ndarray:
 def _synthetic_forward(layer, arr: np.ndarray) -> np.ndarray:
     weight_scale = 1.0
     if layer.weights:
-        # Only use actual weight/bias tensors for scale, skip running stats
         scale_candidates = []
         for key, w in layer.weights.items():
             if not hasattr(w, "shape"):
@@ -155,6 +284,8 @@ def _stats(arr: np.ndarray) -> dict:
 
 
 def _channel_count(arr: np.ndarray) -> int:
+    if arr.ndim == 0:
+        return 1
     return int(arr.shape[1]) if arr.ndim >= 2 else int(arr.shape[0])
 
 

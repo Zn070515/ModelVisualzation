@@ -222,11 +222,14 @@ export interface PerfLayer {
   bottleneck_score: number
   memory_read_bytes: number
   memory_write_bytes: number
+  compute_latency_us: number
+  memory_latency_us: number
+  bound: 'compute' | 'memory' | 'balanced'
 }
 
 export interface PerfResult {
   model_id: string
-  hardware: 'cpu' | 'gpu' | 'edge_tpu'
+  hardware: string
   layers: PerfLayer[]
   summary: {
     total_latency_us: number
@@ -249,6 +252,8 @@ export interface QuantTensorStats {
 export interface QuantResult {
   model_id: string
   bits: number
+  mode: string
+  per_channel: boolean
   layers: Array<{ layer_name: string; op_type: string; weights: Record<string, QuantTensorStats> }>
   summary: {
     overall_mean_abs_err: number
@@ -282,7 +287,7 @@ export interface PruneResult {
   layers: Array<{
     layer_name: string
     op_type: string
-    channel_importance: Array<{ channel: number; l1_norm: number; l2_norm: number; importance: number }>
+    channel_importance: Array<{ channel: number; l1_norm: number; l2_norm: number; importance: number; fisher_score: number; activation_score: number; combined_importance: number; prune_priority: number }>
     sparsity_heatmap: number[][]
     total_channels: number
     prunable_channels_30pct: number

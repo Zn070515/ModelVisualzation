@@ -157,6 +157,8 @@ def _parse_module(model: torch.nn.Module) -> IRModel:
             weights=weights,
         ))
 
+    _infer_shapes(model, layers)
+
     return IRModel(
         format="pytorch",
         producer="PyTorch",
@@ -165,6 +167,61 @@ def _parse_module(model: torch.nn.Module) -> IRModel:
         inputs=[TensorSpec(name="input", shape=[1, 3, -1, -1], dtype="float32")],
         outputs=[TensorSpec(name="output", shape=[-1], dtype="float32")],
     )
+
+
+def _make_dummy_input(layers: list[IRLayer]) -> torch.Tensor:
+    """Create a dummy input tensor sized from the first conv/linear layer's in_channels/in_features."""
+    for layer in layers:
+        if "in_channels" in layer.params:
+            c = int(layer.params["in_channels"])
+            return torch.zeros(1, c, 224, 224)
+        if "in_features" in layer.params:
+            f = int(layer.params["in_features"])
+            return torch.zeros(1, f)
+    return torch.zeros(1, 3, 224, 224)
+
+
+def _infer_shapes(model: torch.nn.Module, layers: list[IRLayer]) -> None:
+    shape_map: dict[str, tuple] = {}
+    hooks = []
+
+    def make_hook(name):
+        def hook(module, inp, out):
+            if inp and inp[0] is not None:
+                shape_map[f"{name}.input"] = list(inp[0].shape)
+            if out is not None:
+                if hasattr(out, "shape"):
+                    shape_map[f"{name}.output"] = list(out.shape)
+                elif isinstance(out, (tuple, list)) and hasattr(out[0], "shape"):
+                    shape_map[f"{name}.output"] = list(out[0].shape)
+        return hook
+
+    for name, module in model.named_modules():
+        if name:
+            hooks.append(module.register_forward_hook(make_hook(name)))
+
+    import logging
+    _log = logging.getLogger(__name__)
+
+    try:
+        model.eval()
+        with torch.no_grad():
+            dummy = _make_dummy_input(layers)
+            model(dummy)
+    except Exception:
+        _log.warning("Shape inference via forward hooks failed; using weight-based fallback")
+    finally:
+        for h in hooks:
+            h.remove()
+
+    for layer in layers:
+        if layer.name in shape_map:
+            inp_key = f"{layer.name}.input"
+            out_key = f"{layer.name}.output"
+            if inp_key in shape_map:
+                layer.input_shapes = [shape_map[inp_key]]
+            if out_key in shape_map:
+                layer.output_shapes = [shape_map[out_key]]
 
 
 def _parse_torchscript(model: torch.jit.ScriptModule) -> IRModel:
@@ -212,6 +269,7 @@ def _parse_checkpoint_dict(ckpt: dict) -> IRModel:
             "The checkpoint may use nested state_dicts (e.g., {model: {encoder: {...}, decoder: {...}}}). "
             "Try saving with a flat state_dict or uploading the full model."
         )
+    _infer_shapes_from_weights(layers)
     return IRModel(
         format="pytorch",
         producer="PyTorch Checkpoint",
@@ -266,6 +324,24 @@ def _find_state_dict(ckpt: dict) -> dict | None:
         if isinstance(val, dict) and len(val) >= 1 and _has_weight_keys(val):
             return val
     return None
+
+
+def _infer_shapes_from_weights(layers: list[IRLayer]) -> None:
+    """Infer output shapes from weight tensor shapes for checkpoint-based parsing."""
+    for layer in layers:
+        w = layer.weights.get("weight")
+        if w is None or not hasattr(w, "shape"):
+            continue
+        shape = w.shape
+        ndim = len(shape)
+        if ndim >= 4:
+            # Conv2d/ConvTranspose2d: [C_out, C_in, K_h, K_w]
+            layer.output_shapes = [[1, int(shape[0]), -1, -1]]
+        elif ndim == 2:
+            # Linear: [out_features, in_features]
+            layer.output_shapes = [[1, int(shape[0])]]
+        elif ndim == 1 and ("bn" in layer.name.lower() or "batch" in layer.name.lower()):
+            layer.output_shapes = [[1, int(shape[0])]]
 
 
 def _state_dict_to_layers(state_dict: dict) -> list[IRLayer]:

@@ -80,7 +80,7 @@ export async function generateReport(modelIds: string[], format: 'json' | 'html'
   })
 }
 
-export async function estimatePerf(id: string, hardware: 'cpu' | 'gpu' | 'edge_tpu'): Promise<PerfResult> {
+export async function estimatePerf(id: string, hardware: string): Promise<PerfResult> {
   return request(`/model/${id}/perf`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -88,11 +88,11 @@ export async function estimatePerf(id: string, hardware: 'cpu' | 'gpu' | 'edge_t
   })
 }
 
-export async function simulateQuant(id: string, bits: 8 | 16): Promise<QuantResult> {
+export async function simulateQuant(id: string, bits: number, perChannel?: boolean, unsigned?: boolean): Promise<QuantResult> {
   return request('/quant/simulate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model_id: id, bits }),
+    body: JSON.stringify({ model_id: id, bits, per_channel: perChannel ?? false, unsigned: unsigned ?? false }),
   })
 }
 

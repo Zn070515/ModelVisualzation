@@ -29,6 +29,24 @@ def _parse_tflite_from_flatbuffer(model) -> IRModel:
         tensor_shapes[i] = shape
         tensor_dtypes[i] = dtype
 
+    # Build buffer lookup: tensor_index → numpy array
+    buffer_weights: dict[int, np.ndarray] = {}
+    for i in range(subgraph.TensorsLength()):
+        t = subgraph.Tensors(i)
+        buf_idx = t.Buffer()
+        if buf_idx > 0 and buf_idx < model.BuffersLength():
+            buf = model.Buffers(buf_idx)
+            raw = buf.DataAsNumpy()
+            if raw is not None and hasattr(raw, "__len__") and len(raw) > 0:
+                np_dtype = _tflite_to_np_dtype(t.Type())
+                shape = [t.Shape(k) for k in range(t.ShapeLength())]
+                if np_dtype and shape and all(s > 0 for s in shape):
+                    try:
+                        arr = np.frombuffer(raw, dtype=np_dtype).reshape(shape)
+                        buffer_weights[i] = arr
+                    except (ValueError, TypeError):
+                        pass
+
     layers = []
     for i in range(subgraph.OperatorsLength()):
         op = subgraph.Operators(i)
@@ -52,6 +70,22 @@ def _parse_tflite_from_flatbuffer(model) -> IRModel:
             outputs.append(name)
             output_shapes.append(tensor_shapes.get(idx, []))
 
+        # Extract weights from input tensors that have buffer data
+        weights = {}
+        for j in range(op.InputsLength()):
+            idx = op.Inputs(j)
+            if idx in buffer_weights:
+                tname = tensor_names.get(idx, f"tensor_{idx}")
+                key = tname.rsplit("/", 1)[-1].rsplit(".", 1)[-1] if "." in tname or "/" in tname else tname
+                if key in ("weight", "bias", "running_mean", "running_var"):
+                    weights[key] = buffer_weights[idx]
+                elif "weight" in key.lower():
+                    weights["weight"] = buffer_weights[idx]
+                elif "bias" in key.lower():
+                    weights["bias"] = buffer_weights[idx]
+                else:
+                    weights[key] = buffer_weights[idx]
+
         layers.append(IRLayer(
             name=f"{op_type}_{i}",
             op_type=op_type,
@@ -60,7 +94,7 @@ def _parse_tflite_from_flatbuffer(model) -> IRModel:
             params={},
             input_shapes=input_shapes,
             output_shapes=output_shapes,
-            weights={},
+            weights=weights,
         ))
 
     # Build input/output specs
@@ -98,6 +132,15 @@ def _tflite_dtype(dtype: int) -> str:
         8: "complex64", 9: "int8",
     }
     return mapping.get(dtype, f"unknown({dtype})")
+
+
+def _tflite_to_np_dtype(dtype: int):
+    """Map TFLite tensor type to numpy dtype."""
+    mapping = {
+        0: np.float32, 1: np.float16, 2: np.int32, 3: np.uint8,
+        4: np.int64, 6: np.bool_, 7: np.int16, 9: np.int8,
+    }
+    return mapping.get(dtype)
 
 
 def _tflite_builtin_op_name(code: int) -> str:

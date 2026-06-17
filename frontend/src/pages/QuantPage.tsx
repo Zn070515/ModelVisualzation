@@ -7,7 +7,9 @@ import type { QuantResult } from '../types'
 
 export default function QuantPage() {
   const { modelId } = useParams<{ modelId: string }>()
-  const [bits, setBits] = useState<8 | 16>(8)
+  const [bits, setBits] = useState<4 | 8 | 16>(8)
+  const [perChannel, setPerChannel] = useState(false)
+  const [unsigned, setUnsigned] = useState(false)
   const [result, setResult] = useState<QuantResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -16,11 +18,11 @@ export default function QuantPage() {
     if (!modelId) return
     setError(null)
     setLoading(true)
-    simulateQuant(modelId, bits)
+    simulateQuant(modelId, bits, perChannel, unsigned)
       .then(setResult)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
-  }, [modelId, bits])
+  }, [modelId, bits, perChannel, unsigned])
 
   const worstWeight = result?.layers.find((l) => l.layer_name === result.summary.worst_layer)
 
@@ -28,17 +30,29 @@ export default function QuantPage() {
     <ModelLayout modelId={modelId} activeTab="quant">
       <div style={page}>
         <div style={toolbar}>
-          {[8, 16].map((item) => (
-            <button key={item} onClick={() => setBits(item as 8 | 16)} style={tab(bits === item)}>
-              {item === 8 ? 'INT8' : 'FP16'}
+          {([4, 8, 16] as const).map((item) => (
+            <button key={item} onClick={() => setBits(item)} style={tab(bits === item)}>
+              {item === 4 ? 'INT4' : item === 8 ? 'INT8' : 'FP16'}
             </button>
           ))}
+          <span style={separator} />
+          <label style={toggle}>
+            <input type="checkbox" checked={perChannel} onChange={(e) => setPerChannel(e.target.checked)} />
+            Per-channel
+          </label>
+          {bits !== 16 && (
+            <label style={toggle}>
+              <input type="checkbox" checked={unsigned} onChange={(e) => setUnsigned(e.target.checked)} />
+              Unsigned
+            </label>
+          )}
         </div>
         {loading && <div style={loader}>Simulating...</div>}
         {error && <div style={empty}>{error}</div>}
         {result && (
           <>
             <div style={cards}>
+              <Metric label="Mode" value={result.mode || `${result.bits}-bit`} />
               <Metric label="Mean abs err" value={result.summary.overall_mean_abs_err.toExponential(2)} />
               <Metric label="RMSE" value={result.summary.overall_rmse.toExponential(2)} />
               <Metric label="Worst layer" value={result.summary.worst_layer || '-'} />
@@ -85,9 +99,11 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 const page = { height: '100%', overflowY: 'auto' as const, padding: 16 }
-const toolbar = { display: 'flex', gap: 8, marginBottom: 14 }
+const toolbar = { display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center' as const, flexWrap: 'wrap' as const }
 const tab = (active: boolean) => ({ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--border)', background: active ? 'var(--accent)' : 'var(--bg-secondary)', color: active ? '#fff' : 'var(--text-secondary)', cursor: 'pointer', fontSize: 11, fontWeight: 600 })
-const cards = { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 14 }
+const separator = { width: 1, height: 20, background: 'var(--border)', margin: '0 4px' }
+const toggle = { display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-secondary)', cursor: 'pointer' }
+const cards = { display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 14 }
 const metric = { background: 'var(--bg-secondary)', borderRadius: 8, padding: 14 }
 const metricLabel = { fontSize: 11, color: 'var(--text-muted)' }
 const metricValue = { fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }

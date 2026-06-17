@@ -16,7 +16,7 @@ def make_model() -> IRModel:
 
 
 def test_estimate_perf():
-    result = estimate_perf(make_model(), "cpu", "m")
+    result = estimate_perf(make_model(), "i9_13900k", "m")
     assert result["summary"]["total_latency_us"] > 0
     assert result["layers"][0]["flops"] > 0
 

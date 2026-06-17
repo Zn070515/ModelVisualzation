@@ -29,12 +29,14 @@ class ReportRequest(BaseModel):
 
 
 class PerfRequest(BaseModel):
-    hardware: str = "cpu"
+    hardware: str = "i9_13900k"
 
 
 class QuantRequest(BaseModel):
     model_id: str
     bits: int = 8
+    per_channel: bool = False
+    unsigned: bool = False
 
 
 class PruneRequest(BaseModel):
@@ -75,7 +77,7 @@ def perf(model_id: str, req: PerfRequest):
 @router.post("/quant/simulate")
 def quant(req: QuantRequest):
     try:
-        return simulate_quantization(get_model(req.model_id), req.model_id, req.bits)
+        return simulate_quantization(get_model(req.model_id), req.model_id, req.bits, req.per_channel, req.unsigned)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 

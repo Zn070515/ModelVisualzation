@@ -6,11 +6,18 @@ import ModelLayout from '../components/ModelLayout'
 import type { PerfResult } from '../types'
 import { formatBytes, formatNum } from '../utils'
 
-type Hardware = 'cpu' | 'gpu' | 'edge_tpu'
+type Hardware = 'i9_13900k' | 'rtx_4090' | 'apple_m2' | 'rpi4'
+
+const HW_LABELS: Record<Hardware, string> = {
+  i9_13900k: 'i9-13900K',
+  rtx_4090: 'RTX 4090',
+  apple_m2: 'Apple M2',
+  rpi4: 'RPi 4',
+}
 
 export default function PerformancePage() {
   const { modelId } = useParams<{ modelId: string }>()
-  const [hardware, setHardware] = useState<Hardware>('cpu')
+  const [hardware, setHardware] = useState<Hardware>('i9_13900k')
   const [result, setResult] = useState<PerfResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -29,8 +36,8 @@ export default function PerformancePage() {
     <ModelLayout modelId={modelId} activeTab="performance">
       <div style={page}>
         <div style={toolbar}>
-          {(['cpu', 'gpu', 'edge_tpu'] as Hardware[]).map((item) => (
-            <button key={item} onClick={() => setHardware(item)} style={tab(item === hardware)}>{item.toUpperCase()}</button>
+          {(Object.keys(HW_LABELS) as Hardware[]).map((item) => (
+            <button key={item} onClick={() => setHardware(item)} style={tab(item === hardware)}>{HW_LABELS[item]}</button>
           ))}
         </div>
         {loading && <div style={loader}>Estimating...</div>}
@@ -52,6 +59,7 @@ export default function PerformancePage() {
                     <th style={thR}>Params</th>
                     <th style={thR}>FLOPs</th>
                     <th style={thR}>Latency</th>
+                    <th style={thR}>Bound</th>
                     <th style={thR}>Memory R/W</th>
                   </tr>
                 </thead>
@@ -63,6 +71,7 @@ export default function PerformancePage() {
                       <td style={right}>{formatNum(layer.params)}</td>
                       <td style={right}>{formatNum(layer.flops)}</td>
                       <td style={right}><span style={{ color: layer.is_bottleneck ? 'var(--red)' : undefined }}>{layer.est_latency_us.toFixed(1)} us</span></td>
+                      <td style={right}><span style={{ color: boundColor(layer.bound) }}>{layer.bound}</span></td>
                       <td style={right}>{formatBytes(layer.memory_read_bytes + layer.memory_write_bytes)}</td>
                     </tr>
                   ))}
@@ -74,6 +83,12 @@ export default function PerformancePage() {
       </div>
     </ModelLayout>
   )
+}
+
+function boundColor(bound: string): string {
+  if (bound === 'compute') return 'var(--red)'
+  if (bound === 'memory') return 'var(--accent)'
+  return 'var(--text-secondary)'
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
