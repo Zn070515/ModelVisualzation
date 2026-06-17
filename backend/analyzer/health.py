@@ -1,16 +1,16 @@
+from __future__ import annotations
+
 import numpy as np
 
 
 def health_check(ir_model, model_id: str = "") -> dict:
-    issues = []
+    issues: list[dict] = []
 
     for layer in ir_model.layers:
         _check_weight_outliers(layer, issues)
         _check_high_sparsity(layer, issues)
-
         if "batchnorm" in layer.op_type.lower():
             _check_bn_anomaly(layer, issues)
-
         if layer.weights:
             _check_vanishing_gradient_risk(layer, issues)
 
@@ -20,21 +20,17 @@ def health_check(ir_model, model_id: str = "") -> dict:
     return {
         "model_id": model_id,
         "issues": issues,
-        "summary": {
-            "total_issues": len(issues),
-            "critical_count": critical,
-            "warning_count": warning,
-        },
+        "summary": {"total_issues": len(issues), "critical_count": critical, "warning_count": warning},
     }
 
 
-def _check_weight_outliers(layer, issues: list):
+def _check_weight_outliers(layer, issues: list[dict]) -> None:
     for wname, warr in layer.weights.items():
-        if not hasattr(warr, 'shape') or warr.size < 10:
+        if not hasattr(warr, "shape") or warr.size < 10:
             continue
         arr = np.asarray(warr, dtype=np.float32)
-        mean = arr.mean()
-        std = arr.std()
+        mean = float(arr.mean())
+        std = float(arr.std())
         if std < 1e-8:
             continue
         zscores = np.abs((arr - mean) / std)
@@ -52,9 +48,9 @@ def _check_weight_outliers(layer, issues: list):
             })
 
 
-def _check_high_sparsity(layer, issues: list):
+def _check_high_sparsity(layer, issues: list[dict]) -> None:
     for wname, warr in layer.weights.items():
-        if not hasattr(warr, 'shape') or warr.size < 10:
+        if not hasattr(warr, "shape") or warr.size < 10:
             continue
         arr = np.asarray(warr, dtype=np.float32)
         sparsity = float(np.sum(np.abs(arr) < 1e-7) / arr.size)
@@ -69,10 +65,10 @@ def _check_high_sparsity(layer, issues: list):
             })
 
 
-def _check_bn_anomaly(layer, issues: list):
+def _check_bn_anomaly(layer, issues: list[dict]) -> None:
     running_mean = layer.weights.get("running_mean")
     running_var = layer.weights.get("running_var")
-    if running_mean is not None and hasattr(running_mean, 'shape'):
+    if running_mean is not None and hasattr(running_mean, "shape"):
         mean_abs = float(np.mean(np.abs(np.asarray(running_mean, dtype=np.float32))))
         if mean_abs > 3.0:
             issues.append({
@@ -82,7 +78,7 @@ def _check_bn_anomaly(layer, issues: list):
                 "message": f"BatchNorm running_mean 偏离零点 (mean|abs|={mean_abs:.2f})，归一化效果可能减弱",
                 "detail": {"mean_abs": round(mean_abs, 2), "param": "running_mean"},
             })
-    if running_var is not None and hasattr(running_var, 'shape'):
+    if running_var is not None and hasattr(running_var, "shape"):
         var_mean = float(np.mean(np.asarray(running_var, dtype=np.float32)))
         if var_mean < 1e-3:
             issues.append({
@@ -102,9 +98,9 @@ def _check_bn_anomaly(layer, issues: list):
             })
 
 
-def _check_vanishing_gradient_risk(layer, issues: list):
+def _check_vanishing_gradient_risk(layer, issues: list[dict]) -> None:
     for wname, warr in layer.weights.items():
-        if not hasattr(warr, 'shape') or warr.size < 10:
+        if not hasattr(warr, "shape") or warr.size < 10:
             continue
         arr = np.asarray(warr, dtype=np.float32).ravel()
         std = float(np.std(arr))
@@ -117,5 +113,5 @@ def _check_vanishing_gradient_risk(layer, issues: list):
                 "severity": "warning",
                 "type": "vanishing_gradient_risk",
                 "message": f"{wname}: 权重分布极窄 (σ={std:.6f}, σ/range={std/rng:.4f})，可能存在梯度消失风险",
-                "detail": {"weight_name": wname, "std": round(std, 6), "std_range_ratio": round(std/rng, 4)},
+                "detail": {"weight_name": wname, "std": round(std, 6), "std_range_ratio": round(std / rng, 4)},
             })

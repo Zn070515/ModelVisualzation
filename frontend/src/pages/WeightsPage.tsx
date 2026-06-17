@@ -18,6 +18,8 @@ export default function WeightsPage() {
   const [selectedLayer, setSelectedLayer] = useState<string | null>(null)
   const [layerStats, setLayerStats] = useState<WeightLayerStats | null>(null)
   const [loading, setLoading] = useState(false)
+  const [overviewError, setOverviewError] = useState<string | null>(null)
+  const [layerError, setLayerError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!modelId) return
@@ -28,20 +30,22 @@ export default function WeightsPage() {
 
   useEffect(() => {
     if (!modelId) return
+    setOverviewError(null)
     getWeightOverview(modelId).then((o) => {
       setOverview(o.layers)
       if (o.layers.length > 0) {
         setSelectedLayer(o.layers[0].layer_name)
       }
-    }).catch(() => {})
+    }).catch((err: Error) => setOverviewError(err.message))
   }, [modelId])
 
   useEffect(() => {
     if (!modelId || !selectedLayer) return
     setLoading(true)
+    setLayerError(null)
     getWeightStats(modelId, selectedLayer)
       .then(setLayerStats)
-      .catch(() => setLayerStats(null))
+      .catch((err: Error) => { setLayerStats(null); setLayerError(err.message) })
       .finally(() => setLoading(false))
   }, [modelId, selectedLayer])
 
@@ -100,7 +104,12 @@ export default function WeightsPage() {
               </div>
             </div>
           ))}
-          {(!overview || overview.length === 0) && (
+          {overviewError && (
+            <div style={{ padding: 12, color: 'var(--red)', fontSize: 11 }}>
+              {overviewError}
+            </div>
+          )}
+          {(!overview || overview.length === 0) && !overviewError && (
             <div style={{ padding: 12, color: 'var(--text-muted)', fontSize: 11 }}>
               暂无有权重的层
             </div>
@@ -117,6 +126,12 @@ export default function WeightsPage() {
           {loading && (
             <div style={{ color: 'var(--text-secondary)', fontSize: 13, textAlign: 'center', paddingTop: 40 }}>
               加载中...
+            </div>
+          )}
+
+          {layerError && !loading && (
+            <div style={{ color: 'var(--red)', fontSize: 13, textAlign: 'center', paddingTop: 40 }}>
+              {layerError}
             </div>
           )}
 

@@ -207,7 +207,7 @@ export interface BatchReport {
     param_count: number
     op_types: string[]
   }>
-  comparisons: Array<Record<string, number>>
+  comparisons: Array<Record<string, unknown>>
   summary: { model_count: number; total_params: number; max_layers: number }
   html?: string
 }

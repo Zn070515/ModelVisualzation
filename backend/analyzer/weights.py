@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import numpy as np
 
 
 def compute_layer_weight_stats(layer) -> dict:
-    weight_stats = {}
+    weight_stats: dict[str, dict] = {}
     for wname, warr in layer.weights.items():
-        if not hasattr(warr, 'shape'):
+        if not hasattr(warr, "shape"):
             continue
         arr = np.asarray(warr, dtype=np.float32).ravel()
         hist = np.histogram(arr, bins=50)
@@ -20,29 +22,25 @@ def compute_layer_weight_stats(layer) -> dict:
                 "bin_edges": [round(float(e), 6) for e in hist[1]],
             },
         }
-    return {
-        "layer_name": layer.name,
-        "op_type": layer.op_type,
-        "weights": weight_stats,
-    }
+    return {"layer_name": layer.name, "op_type": layer.op_type, "weights": weight_stats}
 
 
 def compute_weight_overview(ir_model) -> dict:
-    layer_summaries = []
-    all_means = []
-    all_stds = []
-    all_sparsities = []
+    layer_summaries: list[dict] = []
+    all_means: list[float] = []
+    all_stds: list[float] = []
+    all_sparsities: list[float] = []
     total_wp = 0
 
     for layer in ir_model.layers:
         pcount = layer.param_count()
         if pcount == 0 or not layer.weights:
             continue
-        layer_mean_vals = []
-        layer_std_vals = []
-        layer_sparsity_vals = []
+        layer_mean_vals: list[float] = []
+        layer_std_vals: list[float] = []
+        layer_sparsity_vals: list[float] = []
         for w in layer.weights.values():
-            if not hasattr(w, 'shape'):
+            if not hasattr(w, "shape"):
                 continue
             arr = np.asarray(w, dtype=np.float32).ravel()
             layer_mean_vals.append(float(np.mean(arr)))

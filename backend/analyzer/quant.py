@@ -1,17 +1,24 @@
+from __future__ import annotations
+
 import numpy as np
 
 
-def simulate_quantization(model, model_id: str = "", bits: int = 8,
-                          per_channel: bool = False,
-                          unsigned: bool = False) -> dict:
+def simulate_quantization(
+    model,
+    model_id: str = "",
+    bits: int = 8,
+    per_channel: bool = False,
+    unsigned: bool = False,
+) -> dict:
     if bits not in (4, 8, 16):
         raise ValueError("Supported bits: 4, 8, 16")
 
     mode = "fp16" if bits == 16 else ("uint" if unsigned else "int")
-    layers = []
-    all_errors = []
+    layers: list[dict] = []
+    all_errors: list[tuple[str, float, float]] = []
+
     for layer in model.layers:
-        layer_weights = {}
+        layer_weights: dict[str, dict] = {}
         for name, weight in layer.weights.items():
             if not hasattr(weight, "shape"):
                 continue
@@ -50,8 +57,7 @@ def _simulate_tensor(arr: np.ndarray, bits: int, per_channel: bool, unsigned: bo
 
     if per_channel:
         return _per_channel_quant(arr, bits, unsigned, op_type)
-    else:
-        return _per_tensor_quant(arr, bits, unsigned)
+    return _per_tensor_quant(arr, bits, unsigned)
 
 
 def _per_tensor_quant(arr: np.ndarray, bits: int, unsigned: bool) -> dict:
@@ -89,18 +95,15 @@ def _per_channel_quant(arr: np.ndarray, bits: int, unsigned: bool, op_type: str 
     if arr.ndim <= 1:
         return _per_tensor_quant(arr, bits, unsigned)
 
-    # Select the output-channel axis. PyTorch ConvTranspose2d stores (C_in, C_out, KH, KW).
     channel_axis = 0
     op_lower = op_type.lower()
     if "convtranspose" in op_lower and arr.ndim >= 4:
         channel_axis = 1
 
-    # For TFLite (OHWI/OHWI-like), output channels are last dim when ndim == 4 and last dim > first dims
     if channel_axis == 0 and arr.ndim == 4 and arr.shape[3] > arr.shape[0] and arr.shape[3] > arr.shape[1]:
         channel_axis = 3
 
     c_out = arr.shape[channel_axis]
-    # Move channel_axis to front, reshape to (c_out, -1)
     moved = np.moveaxis(arr, channel_axis, 0)
     reshaped = moved.reshape(c_out, -1)
     scales = np.zeros(c_out, dtype=np.float32)
@@ -115,15 +118,13 @@ def _per_channel_quant(arr: np.ndarray, bits: int, unsigned: bool, op_type: str 
             scales[c] = (max_val - min_val) / qmax if (max_val - min_val) > 0 else 1.0
             zp = int(round(-min_val / scales[c])) if scales[c] else 0
             zero_points[c] = max(qmin, min(qmax, zp))
-            q = np.clip(np.round(row / scales[c]) + zero_points[c], qmin, qmax)
+            restored_flat[c] = (np.clip(np.round(row / scales[c]) + zero_points[c], qmin, qmax) - zero_points[c]) * scales[c]
         else:
             max_abs = float(np.max(np.abs(row))) if row.size else 0.0
             scales[c] = max_abs / qmax if max_abs > 0 else 1.0
             zero_points[c] = 0
-            q = np.clip(np.round(row / scales[c]), qmin, qmax)
-        restored_flat[c] = (q - zero_points[c]) * scales[c]
+            restored_flat[c] = np.clip(np.round(row / scales[c]), qmin, qmax) * scales[c]
 
-    # Reshape back and move axis back
     restored_moved = restored_flat.reshape(moved.shape)
     restored = np.moveaxis(restored_moved, 0, channel_axis).astype(np.float32)
 

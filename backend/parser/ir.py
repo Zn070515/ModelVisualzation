@@ -1,16 +1,18 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Optional
+
 import numpy as np
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class TensorSpec:
     name: str
     shape: list[int]
     dtype: str
 
 
-@dataclass
+@dataclass(slots=True)
 class IRLayer:
     name: str
     op_type: str
@@ -19,20 +21,20 @@ class IRLayer:
     params: dict
     input_shapes: list[list[int]]
     output_shapes: list[list[int]]
-    weights: dict = field(default_factory=dict)
+    weights: dict[str, np.ndarray] = field(default_factory=dict)
 
     def param_count(self) -> int:
         total = 0
         for w in self.weights.values():
-            total += int(np.prod(w.shape)) if hasattr(w, 'shape') else 0
+            total += int(np.prod(w.shape)) if hasattr(w, "shape") else 0
         return total
 
 
-@dataclass
+@dataclass(slots=True)
 class IRModel:
     format: str
     producer: str
-    opset_version: Optional[int]
+    opset_version: int | None
     layers: list[IRLayer]
     inputs: list[TensorSpec]
     outputs: list[TensorSpec]

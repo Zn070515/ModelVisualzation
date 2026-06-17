@@ -1,5 +1,6 @@
+from __future__ import annotations
+
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
-from pydantic import BaseModel
 
 from ..analyzer.activation import collect_activations
 from ..analyzer.chain import trace_conversion_chain
@@ -8,47 +9,37 @@ from ..analyzer.perf import estimate_perf
 from ..analyzer.prune import analyze_pruning
 from ..analyzer.quant import simulate_quantization
 from ..analyzer.report import generate_batch_report
-from .parse import _model_store, _model_paths, get_model
+from ..models import (
+    ActivationResponse,
+    BatchReportResponse,
+    ChainResponse,
+    CompareRequest,
+    ChainRequest,
+    CompareResponse,
+    PerfRequest,
+    PerfResponse,
+    PruneRequest,
+    PruneResponse,
+    QuantRequest,
+    QuantResponse,
+    ReportRequest,
+)
+from .parse import _model_paths, _model_store, get_model
 
 router = APIRouter(prefix="/api", tags=["analysis"])
 
 
-class CompareRequest(BaseModel):
-    model_a_id: str
-    model_b_id: str
-
-
-class ChainRequest(BaseModel):
-    model_ids: list[str]
-    labels: list[str] = []
-
-
-class ReportRequest(BaseModel):
-    model_ids: list[str]
-    format: str = "json"
-
-
-class PerfRequest(BaseModel):
-    hardware: str = "i9_13900k"
-
-
-class QuantRequest(BaseModel):
-    model_id: str
-    bits: int = 8
-    per_channel: bool = False
-    unsigned: bool = False
-
-
-class PruneRequest(BaseModel):
-    model_id: str
-
-
-@router.post("/compare")
+@router.post("/compare", response_model=CompareResponse)
 def compare(req: CompareRequest):
-    return compare_models(get_model(req.model_a_id), get_model(req.model_b_id), req.model_a_id, req.model_b_id)
+    return compare_models(
+        get_model(req.model_a_id),
+        get_model(req.model_b_id),
+        req.model_a_id,
+        req.model_b_id,
+    )
 
 
-@router.post("/chain")
+@router.post("/chain", response_model=ChainResponse)
 def chain(req: ChainRequest):
     if len(req.model_ids) < 1:
         raise HTTPException(400, "At least 1 model_id required")
@@ -57,16 +48,16 @@ def chain(req: ChainRequest):
     return trace_conversion_chain(models, labels, req.model_ids)
 
 
-@router.post("/report/generate")
+@router.post("/report/generate", response_model=BatchReportResponse)
 def report(req: ReportRequest):
-    missing = [model_id for model_id in req.model_ids if model_id not in _model_store]
+    missing = [mid for mid in req.model_ids if mid not in _model_store]
     if missing:
         raise HTTPException(404, f"Models not found: {missing}")
-    models = {model_id: _model_store[model_id] for model_id in req.model_ids}
+    models = {mid: _model_store[mid] for mid in req.model_ids}
     return generate_batch_report(models, req.format)
 
 
-@router.post("/model/{model_id}/perf")
+@router.post("/model/{model_id}/perf", response_model=PerfResponse)
 def perf(model_id: str, req: PerfRequest):
     try:
         return estimate_perf(get_model(model_id), req.hardware, model_id)
@@ -74,15 +65,18 @@ def perf(model_id: str, req: PerfRequest):
         raise HTTPException(400, str(exc)) from exc
 
 
-@router.post("/quant/simulate")
+@router.post("/quant/simulate", response_model=QuantResponse)
 def quant(req: QuantRequest):
     try:
-        return simulate_quantization(get_model(req.model_id), req.model_id, req.bits, req.per_channel, req.unsigned)
+        return simulate_quantization(
+            get_model(req.model_id), req.model_id,
+            req.bits, req.per_channel, req.unsigned,
+        )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
 
-@router.post("/model/{model_id}/activation")
+@router.post("/model/{model_id}/activation", response_model=ActivationResponse)
 async def activation(
     model_id: str,
     file: UploadFile = File(...),
@@ -94,6 +88,6 @@ async def activation(
     return collect_activations(get_model(model_id), content, model_id, selected, model_path)
 
 
-@router.post("/prune/analyze")
+@router.post("/prune/analyze", response_model=PruneResponse)
 def prune(req: PruneRequest):
     return analyze_pruning(get_model(req.model_id), req.model_id)

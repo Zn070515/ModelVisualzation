@@ -1,18 +1,19 @@
+from __future__ import annotations
+
 from collections import Counter
 
 
-def trace_conversion_chain(models: list, labels: list[str] | None = None, model_ids: list[str] | None = None) -> dict:
-    """Trace the real conversion chain across multiple uploaded models.
-
-    Compares consecutive model pairs to detect operator additions, removals,
-    renames, and count changes across the chain.
-    """
+def trace_conversion_chain(
+    models: list,
+    labels: list[str] | None = None,
+    model_ids: list[str] | None = None,
+) -> dict:
     if labels is None:
         labels = model_ids if model_ids else [f"model_{i}" for i in range(len(models))]
     if model_ids is None:
         model_ids = [""] * len(models)
 
-    stages = []
+    stages: list[dict] = []
     for model, label, mid in zip(models, labels, model_ids):
         op_counts = Counter(layer.op_type for layer in model.layers)
         stages.append({
@@ -26,7 +27,7 @@ def trace_conversion_chain(models: list, labels: list[str] | None = None, model_
             "total_ops": sum(op_counts.values()),
         })
 
-    transitions = []
+    transitions: list[dict] = []
     for i in range(len(models) - 1):
         a_ops = {layer.op_type for layer in models[i].layers}
         b_ops = {layer.op_type for layer in models[i + 1].layers}
@@ -36,7 +37,6 @@ def trace_conversion_chain(models: list, labels: list[str] | None = None, model_
         common = a_ops & b_ops
 
         renamed = _detect_renames(removed, added)
-
         renamed_sources = {r["from"] for r in renamed}
         renamed_targets = {r["to"] for r in renamed}
 
@@ -53,10 +53,7 @@ def trace_conversion_chain(models: list, labels: list[str] | None = None, model_
             "param_count_delta": models[i + 1].total_params() - models[i].total_params(),
         })
 
-    total_op_loss = sum(
-        len(t["added_ops"]) + len(t["removed_ops"])
-        for t in transitions
-    )
+    total_op_loss = sum(len(t["added_ops"]) + len(t["removed_ops"]) for t in transitions)
 
     return {
         "model_ids": model_ids,
@@ -70,8 +67,8 @@ def trace_conversion_chain(models: list, labels: list[str] | None = None, model_
     }
 
 
-def _detect_renames(removed: list[str], added: list[str]) -> list[dict]:
-    result = []
+def _detect_renames(removed: list[str], added: list[str]) -> list[dict[str, str]]:
+    result: list[dict[str, str]] = []
     remaining_added = list(added)
     remaining_removed = list(removed)
     for r in list(remaining_removed):

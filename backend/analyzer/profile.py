@@ -1,8 +1,12 @@
+from __future__ import annotations
+
 import numpy as np
 
 
-def compute_profile(ir_model):
-    layer_profiles = []
+def compute_profile(ir_model) -> dict:
+    from ..parser.ir import IRModel
+
+    layer_profiles: list[dict] = []
     total_params = 0
     total_flops = 0
 
@@ -47,7 +51,7 @@ def _conv_flops(layer) -> int:
     spatial = int(np.prod(out_shape[2:])) if len(out_shape) > 2 else 1
 
     weight = _find_weight(layer)
-    if weight is not None and hasattr(weight, 'shape') and len(weight.shape) >= 2:
+    if weight is not None and hasattr(weight, "shape") and len(weight.shape) >= 2:
         c_in = int(weight.shape[1])
         k = int(np.prod(weight.shape[2:]))
     else:
@@ -57,23 +61,26 @@ def _conv_flops(layer) -> int:
     return n * c_out * c_in * k * spatial * 2
 
 
-def _find_weight(layer):
-    """Find the main weight tensor — prioritizes 'weight', '.weight' suffix, or largest any tensor."""
+def _find_weight(layer) -> np.ndarray | None:
     if not layer.weights:
         return None
     w = layer.weights.get("weight")
     if w is not None and hasattr(w, "shape"):
         return w
-    for key, val in layer.weights.items():
-        if key.endswith(".weight") and hasattr(val, "shape"):
+    for val in layer.weights.values():
+        if hasattr(val, "shape") and len(val.shape) >= 3:
             return val
     if layer.weights:
-        return max(layer.weights.values(), key=lambda v: np.prod(v.shape) if hasattr(v, "shape") else 0, default=None)
+        return max(
+            layer.weights.values(),
+            key=lambda v: int(np.prod(v.shape)) if hasattr(v, "shape") else 0,
+            default=None,
+        )
     return None
 
 
 def _linear_flops(layer) -> int:
     weight = layer.weights.get("weight")
-    if weight is not None and hasattr(weight, 'shape') and len(weight.shape) == 2:
+    if weight is not None and hasattr(weight, "shape") and len(weight.shape) == 2:
         return int(weight.shape[0]) * int(weight.shape[1]) * 2
     return 0

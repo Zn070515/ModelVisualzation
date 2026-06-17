@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections import Counter
 
 import numpy as np
@@ -7,16 +9,15 @@ def compare_models(model_a, model_b, model_a_id: str = "", model_b_id: str = "")
     a_types = Counter(layer.op_type for layer in model_a.layers)
     b_types = Counter(layer.op_type for layer in model_b.layers)
 
-    # Build name→layer maps
-    a_by_name = {layer.name: layer for layer in model_a.layers}
-    b_by_name = {layer.name: layer for layer in model_b.layers}
+    a_by_name: dict[str, object] = {layer.name: layer for layer in model_a.layers}
+    b_by_name: dict[str, object] = {layer.name: layer for layer in model_b.layers}
 
     all_names = sorted(set(a_by_name) | set(b_by_name))
     a_only = sorted(set(a_by_name) - set(b_by_name))
     b_only = sorted(set(b_by_name) - set(a_by_name))
     common_names = sorted(set(a_by_name) & set(b_by_name))
 
-    layer_diffs = []
+    layer_diffs: list[dict] = []
     for name in all_names:
         la = a_by_name.get(name)
         lb = b_by_name.get(name)
@@ -28,7 +29,6 @@ def compare_models(model_a, model_b, model_a_id: str = "", model_b_id: str = "")
             status = "removed"
         else:
             status = "added"
-
         layer_diffs.append({
             "name": name,
             "status": status,
@@ -37,8 +37,7 @@ def compare_models(model_a, model_b, model_a_id: str = "", model_b_id: str = "")
             "param_delta": (lb.param_count() if lb else 0) - (la.param_count() if la else 0),
         })
 
-    # Add weight diffs for common layers
-    weight_diffs = []
+    weight_diffs: list[dict] = []
     for name in common_names:
         la = a_by_name[name]
         lb = b_by_name[name]
@@ -47,7 +46,7 @@ def compare_models(model_a, model_b, model_a_id: str = "", model_b_id: str = "")
             wb = lb.weights.get(wname)
             if wa is None or wb is None:
                 continue
-            if not hasattr(wa, 'shape') or not hasattr(wb, 'shape'):
+            if not hasattr(wa, "shape") or not hasattr(wb, "shape"):
                 continue
             arr_a = np.asarray(wa, dtype=np.float32).ravel()
             arr_b = np.asarray(wb, dtype=np.float32).ravel()
@@ -65,13 +64,13 @@ def compare_models(model_a, model_b, model_a_id: str = "", model_b_id: str = "")
     changed = sum(1 for item in layer_diffs if item["status"] != "same")
 
     all_types = sorted(set(a_types) | set(b_types))
-    op_type_diff = [
+    op_type_diff: list[dict] = [
         {"op_type": op_type, "a": a_types[op_type], "b": b_types[op_type], "delta": b_types[op_type] - a_types[op_type]}
         for op_type in all_types
     ]
 
     max_len = max(len(model_a.layers), len(model_b.layers))
-    similarity = 1 - changed / max(max_len, 1)
+    similarity = max(0.0, 1 - changed / max(max_len, 1))
 
     return {
         "model_a_id": model_a_id,
@@ -95,7 +94,7 @@ def compare_models(model_a, model_b, model_a_id: str = "", model_b_id: str = "")
     }
 
 
-def _layer_brief(layer):
+def _layer_brief(layer) -> dict | None:
     if layer is None:
         return None
     return {

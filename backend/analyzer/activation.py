@@ -108,7 +108,7 @@ def _run_onnx_with_intermediate(model_path: str, sample: np.ndarray) -> dict[str
                         for d in input_shape
                     )
                     batch = sample.reshape(dynamic_shape).astype(np.float32)
-                except Exception:
+                except (ValueError, TypeError):
                     batch = sample.reshape((1, -1)).astype(np.float32)
             else:
                 batch = sample.astype(np.float32)
@@ -118,7 +118,7 @@ def _run_onnx_with_intermediate(model_path: str, sample: np.ndarray) -> dict[str
             return {name: np.asarray(val, dtype=np.float32) for name, val in zip(output_names, outputs)}
         finally:
             os.unlink(tmp_path)
-    except Exception:
+    except (RuntimeError, ValueError, ImportError):
         return None
 
 
@@ -126,7 +126,7 @@ def _run_pytorch_hook_forward(model_path: str, sample: np.ndarray) -> dict[str, 
     try:
         import torch
         loaded = torch.load(model_path, map_location="cpu", weights_only=False)
-    except Exception:
+    except (RuntimeError, FileNotFoundError, OSError):
         return None
 
     if isinstance(loaded, dict):
@@ -158,8 +158,10 @@ def _run_pytorch_hook_forward(model_path: str, sample: np.ndarray) -> dict[str, 
             else:
                 inp = torch.from_numpy(sample).float()
             model(inp)
-    except Exception:
-        pass
+    except RuntimeError:
+        import logging
+        _log = logging.getLogger(__name__)
+        _log.warning("PyTorch forward hook failed for activation collection; falling back to synthetic")
     finally:
         for h in hooks:
             h.remove()
@@ -187,7 +189,7 @@ def _run_tflite_interpreter(model_path: str, sample: np.ndarray) -> dict[str, np
             if len(inp.shape) < len(inp_shape):
                 reshape_target = [d if d > 0 else 1 for d in inp_shape]
                 inp = inp.reshape(reshape_target)
-        except Exception:
+        except (ValueError, TypeError):
             pass
         interpreter.set_tensor(input_details[0]["index"], inp)
         interpreter.invoke()
@@ -197,7 +199,7 @@ def _run_tflite_interpreter(model_path: str, sample: np.ndarray) -> dict[str, np
             name = d.get("name") or f"tensor_{d['index']}"
             outputs[name] = interpreter.get_tensor(d["index"]).astype(np.float32)
         return outputs
-    except Exception:
+    except (RuntimeError, ValueError):
         return None
 
 
@@ -237,9 +239,16 @@ def _find_tflite_output(outputs: dict[str, np.ndarray], layer, idx: int) -> np.n
 def _load_sample(sample_bytes: bytes) -> np.ndarray:
     try:
         arr = np.load(io.BytesIO(sample_bytes), allow_pickle=False)
-    except Exception:
+    except (ValueError, OSError):
         arr = np.frombuffer(sample_bytes, dtype=np.float32)
-    arr = np.asarray(arr, dtype=np.float32)
+
+    # Handle structured arrays (e.g. probability distributions with named fields)
+    if hasattr(arr, "dtype") and arr.dtype.names is not None:
+        fields = [np.asarray(arr[name], dtype=np.float32).ravel() for name in arr.dtype.names]
+        arr = np.concatenate(fields) if fields else np.zeros((1, 1), dtype=np.float32)
+    else:
+        arr = np.asarray(arr, dtype=np.float32)
+
     if arr.size == 0:
         arr = np.zeros((1, 1), dtype=np.float32)
     return arr

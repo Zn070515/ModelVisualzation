@@ -1,10 +1,12 @@
-from html import escape
+from __future__ import annotations
 
-from .compare import compare_models
+from html import escape
 
 
 def generate_batch_report(models: dict[str, object], output_format: str = "json") -> dict:
-    rows = []
+    from .compare import compare_models
+
+    rows: list[dict] = []
     for model_id, model in models.items():
         op_types = sorted({layer.op_type for layer in model.layers})
         rows.append({
@@ -16,13 +18,13 @@ def generate_batch_report(models: dict[str, object], output_format: str = "json"
             "op_types": op_types,
         })
 
-    comparisons = []
+    comparisons: list[dict] = []
     ids = list(models.keys())
     for index in range(len(ids) - 1):
         a_id, b_id = ids[index], ids[index + 1]
         comparisons.append(compare_models(models[a_id], models[b_id], a_id, b_id)["summary"])
 
-    report = {
+    report: dict[str, object] = {
         "format": output_format,
         "models": rows,
         "comparisons": comparisons,
@@ -40,8 +42,8 @@ def generate_batch_report(models: dict[str, object], output_format: str = "json"
 def _render_html(rows: list[dict], summary: dict) -> str:
     body_rows = "\n".join(
         "<tr>"
-        f"<td>{escape(row['model_id'])}</td>"
-        f"<td>{escape(row['format'])}</td>"
+        f"<td>{escape(str(row['model_id']))}</td>"
+        f"<td>{escape(str(row['format']))}</td>"
         f"<td>{row['layer_count']}</td>"
         f"<td>{row['param_count']}</td>"
         f"<td>{escape(', '.join(row['op_types']))}</td>"

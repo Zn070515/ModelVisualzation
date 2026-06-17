@@ -20,7 +20,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${url}`, options)
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    const msg = body.message || `HTTP ${res.status}`
+    const msg = body.detail || body.message || `HTTP ${res.status}`
     throw new Error(msg)
   }
   return res.json()
@@ -64,11 +64,12 @@ export async function compareModels(modelAId: string, modelBId: string): Promise
   })
 }
 
-export async function traceChain(modelIds: string[], labels?: string[]): Promise<ChainResult> {
+export async function traceChain(modelIds: string[], labels?: string[], signal?: AbortSignal): Promise<ChainResult> {
   return request('/chain', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ model_ids: modelIds, labels: labels ?? [] }),
+    signal,
   })
 }
 

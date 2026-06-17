@@ -3,7 +3,7 @@ from .ir import IRLayer, IRModel, TensorSpec
 
 
 def parse_tflite(file_path: str) -> IRModel:
-    from tensorflow.lite.python import schema_py_generated as schema_fb
+    from tensorflow.lite.python import schema_py_generated as schema_fb  # type: ignore[import-untyped]
 
     with open(file_path, "rb") as f:
         buf = bytearray(f.read())
@@ -12,7 +12,7 @@ def parse_tflite(file_path: str) -> IRModel:
 
 
 def _parse_tflite_from_flatbuffer(model) -> IRModel:
-    from tensorflow.lite.python import schema_py_generated as schema_fb
+    from tensorflow.lite.python import schema_py_generated as schema_fb  # type: ignore[import-untyped]
 
     subgraph = model.Subgraphs(0)
 
@@ -79,8 +79,12 @@ def _parse_tflite_from_flatbuffer(model) -> IRModel:
                 key = tname.rsplit("/", 1)[-1].rsplit(".", 1)[-1] if "." in tname or "/" in tname else tname
                 if key in ("weight", "bias", "running_mean", "running_var"):
                     weights[key] = buffer_weights[idx]
+                elif key in ("kernel", "kernel:0"):
+                    weights["weight"] = buffer_weights[idx]
                 elif "weight" in key.lower():
                     weights["weight"] = buffer_weights[idx]
+                elif key in ("bias", "bias:0"):
+                    weights["bias"] = buffer_weights[idx]
                 elif "bias" in key.lower():
                     weights["bias"] = buffer_weights[idx]
                 else:

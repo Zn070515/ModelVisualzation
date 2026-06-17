@@ -1,22 +1,30 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { traceChain } from '../api/client'
 import ChainTimeline from '../components/ChainTimeline'
 import type { ChainResult } from '../types'
 
 export default function ChainPage() {
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const modelIds = searchParams.getAll('ids')
   const [result, setResult] = useState<ChainResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [inputIds, setInputIds] = useState(modelIds.join(','))
+  const [loading, setLoading] = useState(false)
+  const controllerRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     if (modelIds.length < 2) return
     setError(null)
-    traceChain(modelIds)
-      .then(setResult)
-      .catch((err) => setError(err.message))
+    setLoading(true)
+    controllerRef.current?.abort()
+    const controller = new AbortController()
+    controllerRef.current = controller
+    traceChain(modelIds, undefined, controller.signal)
+      .then((r) => { if (!controller.signal.aborted) setResult(r) })
+      .catch((err) => { if (!controller.signal.aborted) setError(err.message) })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false) })
+    return () => controller.abort()
   }, [searchParams])
 
   const handleTrace = () => {
@@ -27,11 +35,7 @@ export default function ChainPage() {
     }
     const params = new URLSearchParams()
     ids.forEach((id) => params.append('ids', id))
-    window.history.replaceState(null, '', `?${params.toString()}`)
-    setError(null)
-    traceChain(ids)
-      .then(setResult)
-      .catch((err) => setError(err.message))
+    setSearchParams(params, { replace: true })
   }
 
   return (
@@ -44,7 +48,7 @@ export default function ChainPage() {
           placeholder="model IDs, comma-separated (e.g. a1,b2,c3)"
           style={input}
         />
-        <button onClick={handleTrace} style={btn}>Trace</button>
+        <button onClick={handleTrace} style={btn} disabled={loading}>Trace</button>
       </div>
 
       {error && <div style={empty}>{error}</div>}
